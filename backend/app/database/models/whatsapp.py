@@ -38,6 +38,23 @@ class WhatsAppConversation(Base):
     expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+class WhatsAppSession(Base):
+    """
+    Tracks multi-turn complaint and inquiry state machine for WhatsApp conversations.
+    Steps: IDLE, AWAITING_BUILDING, AWAITING_ROOM, AWAITING_DETAILS, AWAITING_TRACK_ID.
+    """
+    __tablename__ = "whatsapp_sessions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    phone_number = Column(String(30), unique=True, nullable=False, index=True)
+    user_id = Column(String(36), nullable=True, index=True)
+    current_intent = Column(String(50), nullable=True)
+    step = Column(String(50), default="IDLE", nullable=False)
+    context_data = Column(Text, default="{}", nullable=False)
+    last_active_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class WhatsAppMessageLog(Base):
     """
     Audit log of inbound and outbound WhatsApp messages with idempotency tracking.

@@ -26,6 +26,10 @@ else:
 # Repair known drift between the tracked SQLite file and the current models.
 run_startup_migrations(engine)
 
+from app.database.base import Base
+import app.database.models  # noqa: F401
+Base.metadata.create_all(bind=engine)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():

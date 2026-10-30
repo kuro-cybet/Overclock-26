@@ -1,17 +1,19 @@
 import logging
 from typing import Dict, Any, Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, BackgroundTasks, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database.connection import get_db, SessionLocal
 from app.database.models.user import User
-from app.database.models.whatsapp import WhatsAppUserLink, WhatsAppConversation, WhatsAppMessageLog
+from app.database.models.whatsapp import WhatsAppUserLink, WhatsAppConversation, WhatsAppMessageLog, WhatsAppSession
 from app.database.models.notification import NotificationOutbox
 from app.services.whatsapp_service import whatsapp_service
 from app.services.whatsapp_ticket_service import whatsapp_ticket_service
 from app.services.whatsapp_message_processor import whatsapp_message_processor
 from app.services.whatsapp_ai_client import whatsapp_ai_client
+from app.services.whatsapp_assistant import whatsapp_assistant
 from app.schemas.whatsapp import (
     WhatsAppSendRequest,
     WhatsAppSendResponse,
@@ -34,6 +36,10 @@ router = APIRouter(prefix="/whatsapp", tags=["whatsapp"])
     summary="Meta WhatsApp Webhook Handshake Verification",
     description="Validates the hub.verify_token sent by Meta during WhatsApp Cloud API endpoint configuration and echoes hub.challenge."
 )
+@router.get(
+    "/webhook/",
+    include_in_schema=False
+)
 def verify_webhook(
     request: Request,
     hub_mode: Optional[str] = Query(None, alias="hub.mode"),
@@ -43,11 +49,15 @@ def verify_webhook(
     """
     Handles Meta webhook verification GET handshake.
     """
-    if whatsapp_service.verify_hub_token(hub_mode, hub_verify_token):
-        logger.info("[WhatsApp Webhook] Handshake verified successfully with Meta.")
-        return Response(content=hub_challenge or "", media_type="text/plain", status_code=200)
+    mode = hub_mode or request.query_params.get("hub.mode") or request.query_params.get("hub_mode")
+    token = hub_verify_token or request.query_params.get("hub.verify_token") or request.query_params.get("hub_verify_token")
+    challenge = hub_challenge or request.query_params.get("hub.challenge") or request.query_params.get("hub_challenge")
 
-    logger.warning(f"[WhatsApp Webhook] Handshake failed: mode={hub_mode}, token={hub_verify_token}")
+    if whatsapp_service.verify_hub_token(mode, token):
+        logger.info("[WhatsApp Webhook] Handshake verified successfully with Meta. Echoing hub.challenge.")
+        return Response(content=str(challenge or ""), media_type="text/plain", status_code=200)
+
+    logger.warning(f"[WhatsApp Webhook] Handshake failed: mode={mode}, token={token}")
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Verification token mismatch"
@@ -76,6 +86,10 @@ async def _async_process_inbound_message(msg: Dict[str, Any]):
     "/webhook",
     summary="Receive WhatsApp Inbound Message Webhook",
     description="Receives incoming user messages from Meta WhatsApp Cloud API with HMAC signature verification and deduplication."
+)
+@router.post(
+    "/webhook/",
+    include_in_schema=False
 )
 async def receive_webhook(
     request: Request,
@@ -241,3 +255,68 @@ def get_tickets(
         "response": whatsapp_ticket_service.query_user_tickets(db, current_user, query_code)
     }
 
+# -------------------------------------------------------------
+# 7. Simulator & Session Inspection Endpoints
+# -------------------------------------------------------------
+class WhatsAppSimulatePayload(BaseModel):
+    from_phone: str
+    message: str
+
+@router.post(
+    "/simulate",
+    summary="Simulate Inbound WhatsApp Message",
+    description="Simulates incoming WhatsApp chat interactions for testing and Admin UI."
+)
+def simulate_whatsapp_message(
+    payload: WhatsAppSimulatePayload,
+    db: Session = Depends(get_db)
+):
+    import uuid
+    sim_msg_id = f"sim_{uuid.uuid4().hex[:12]}"
+    reply = whatsapp_assistant.handle_incoming_message(
+        db=db,
+        from_phone=payload.from_phone,
+        text=payload.message,
+        message_id=sim_msg_id
+    )
+    session = whatsapp_assistant.get_or_create_session(db, payload.from_phone)
+    return {
+        "status": "ok",
+        "reply": reply,
+        "from_phone": payload.from_phone,
+        "session_step": session.step,
+        "current_intent": session.current_intent
+    }
+
+@router.get(
+    "/session/{phone_number}",
+    summary="Get WhatsApp Session State",
+    description="Returns the active conversation session for a given phone number."
+)
+def get_whatsapp_session(
+    phone_number: str,
+    db: Session = Depends(get_db)
+):
+    clean = phone_number.replace("+", "").replace("-", "").strip()
+    session = db.query(WhatsAppSession).filter(WhatsAppSession.phone_number == clean).first()
+    if not session:
+        return {"phone_number": phone_number, "step": "IDLE", "current_intent": None}
+    return {
+        "phone_number": session.phone_number,
+        "step": session.step,
+        "current_intent": session.current_intent,
+        "user_id": session.user_id,
+        "last_active_at": session.last_active_at.isoformat() if session.last_active_at else None
+    }
+
+@router.get(
+    "/logs",
+    summary="Get WhatsApp Message Logs",
+    description="Returns recent inbound and outbound WhatsApp message logs."
+)
+def get_whatsapp_logs(
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db)
+):
+    logs = db.query(WhatsAppMessageLog).order_by(WhatsAppMessageLog.created_at.desc()).limit(limit).all()
+    return logs

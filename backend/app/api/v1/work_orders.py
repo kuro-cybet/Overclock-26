@@ -384,6 +384,20 @@ def create_work_order(
     # An admin-created work order (outside triage) still updates the reporter.
     workflow_notifications.work_order_created(db, wo, incident, technician)
 
+    # Notify WhatsApp complainants of technician assignment
+    if wo.assigned_technician_id:
+        try:
+            from app.services.whatsapp_assistant import whatsapp_assistant
+            tech_name = technician.name if technician else "Field Support"
+            whatsapp_assistant.notify_incident_state_change(
+                db=db,
+                incident_id=incident.id,
+                event_type="assigned",
+                technician_name=tech_name
+            )
+        except Exception:
+            pass
+
     db.commit()
     db.refresh(wo)
     return wo
@@ -477,6 +491,19 @@ def update_work_order(
 
         wo.status = payload.status
         try:
+            from app.services.whatsapp_assistant import whatsapp_assistant
+            if payload.status == "in_progress":
+                whatsapp_assistant.notify_incident_state_change(
+                    db=db,
+                    incident_id=wo.incident_id,
+                    event_type="in_progress"
+                )
+            elif payload.status in ["completed", "resolved"]:
+                whatsapp_assistant.notify_incident_state_change(
+                    db=db,
+                    incident_id=wo.incident_id,
+                    event_type="resolved"
+                )
             notif_st = 'resolved' if payload.status == 'completed' else payload.status
             notification_service.notify_ticket_state_change(db=db, incident_id=wo.incident_id, new_status=notif_st)
         except Exception:

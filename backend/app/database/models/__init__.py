@@ -25,7 +25,7 @@ from app.database.models.impact import IncidentImpactRecord
 from app.database.models.explanation import DecisionExplanation
 
 # WhatsApp AI Assistant Models
-from app.database.models.whatsapp import WhatsAppUserLink, WhatsAppConversation, WhatsAppMessageLog
+from app.database.models.whatsapp import WhatsAppUserLink, WhatsAppConversation, WhatsAppMessageLog, WhatsAppSession
 
 __all__ = [
     "User",
@@ -65,4 +65,5 @@ __all__ = [
     "WhatsAppUserLink",
     "WhatsAppConversation",
     "WhatsAppMessageLog",
+    "WhatsAppSession",
 ]

@@ -374,7 +374,11 @@ def test_automatic_whatsapp_notifications_on_lifecycle():
         assert prog_notif is not None
         assert "now being addressed" in prog_notif.body
 
-        # 5. Technician completes work (PATCH status to completed)
+        # 5. Complete mandatory checklist items and mark completed
+        from app.database.models.work_order_checklist import WorkOrderChecklistItem
+        db.query(WorkOrderChecklistItem).filter(WorkOrderChecklistItem.work_order_id == wo_id).update({"is_completed": True})
+        db.commit()
+
         done_res = client.patch(f"/api/v1/work-orders/{wo_id}", json={
             "status": "completed",
             "evidence_notes": "Cable replaced, AP rebooted."

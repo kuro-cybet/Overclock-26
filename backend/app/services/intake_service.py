@@ -24,7 +24,8 @@ class IntakeService:
         asset_id: Optional[str] = None,
         category: Optional[str] = None,
         urgency: Optional[str] = None,
-        source: str = "web_portal"
+        source: str = "web_portal",
+        contact_phone: Optional[str] = None
     ) -> Dict[str, Any]:
         # 1. Run AI Extraction
         full_text = f"{title}. {description}"
@@ -98,6 +99,7 @@ class IntakeService:
             reporter_id=reporter_id,
             reporter_role=reporter_role,
             source=source,
+            contact_phone=contact_phone,
             status="correlated" if existing_incident else "submitted",
             incident_id=existing_incident.id if existing_incident else None,
             ai_extracted_meta=json.dumps(ai_extraction)

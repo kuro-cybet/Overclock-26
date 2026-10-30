@@ -61,7 +61,7 @@ class WhatsAppAssistant:
         db: Session,
         from_phone: str,
         text: str,
-        message_id: str
+        message_id: Optional[str] = None
     ) -> str:
         """
         Main entry point for processing incoming WhatsApp messages.

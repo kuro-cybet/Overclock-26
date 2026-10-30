@@ -57,12 +57,13 @@ class Settings(BaseModel):
         return f"{self.SUPABASE_URL.rstrip('/')}/functions/v1/{self.SUPABASE_EMAIL_FUNCTION}"
 
     # WhatsApp Cloud API Configuration
-    WHATSAPP_ACCESS_TOKEN: Optional[str] = os.getenv("WHATSAPP_ACCESS_TOKEN", None)
-    WHATSAPP_PHONE_NUMBER_ID: Optional[str] = os.getenv("WHATSAPP_PHONE_NUMBER_ID", None)
-    WHATSAPP_BUSINESS_ACCOUNT_ID: Optional[str] = os.getenv("WHATSAPP_BUSINESS_ACCOUNT_ID", None)
-    WHATSAPP_VERIFY_TOKEN: str = os.getenv("WHATSAPP_VERIFY_TOKEN", "campusops_verify_token_2026")
-    WHATSAPP_APP_SECRET: Optional[str] = os.getenv("WHATSAPP_APP_SECRET", None)
-    WHATSAPP_API_VERSION: str = os.getenv("WHATSAPP_API_VERSION", "v21.0")
+    WHATSAPP_ACCESS_TOKEN: Optional[str] = _usable_env(os.getenv("WHATSAPP_ACCESS_TOKEN", None))
+    WHATSAPP_PHONE_NUMBER_ID: Optional[str] = _usable_env(os.getenv("WHATSAPP_PHONE_NUMBER_ID", None))
+    WHATSAPP_BUSINESS_ACCOUNT_ID: Optional[str] = _usable_env(os.getenv("WHATSAPP_BUSINESS_ACCOUNT_ID", None))
+    WHATSAPP_VERIFY_TOKEN: str = os.getenv("WHATSAPP_VERIFY_TOKEN", "campusops_verify_token_2026").strip()
+    WHATSAPP_APP_SECRET: Optional[str] = _usable_env(os.getenv("WHATSAPP_APP_SECRET", None))
+    WHATSAPP_API_VERSION: str = os.getenv("WHATSAPP_API_VERSION", "v21.0").strip()
+    WHATSAPP_SIMULATE: bool = os.getenv("WHATSAPP_SIMULATE", "false").strip().lower() in ("true", "1", "yes")
 
     # AI Service Configuration (ngrok HTTPS or local microservice)
     AI_SERVICE_URL: str = os.getenv("AI_SERVICE_URL", "http://127.0.0.1:8001")

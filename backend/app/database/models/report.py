@@ -17,7 +17,8 @@ class Report(Base):
     asset_id = Column(String(36), nullable=True, index=True)
     reporter_id = Column(String(36), nullable=False, index=True)
     reporter_role = Column(String(50), nullable=False)  # student, faculty, admin, technician
-    source = Column(String(50), default="web_portal", nullable=False)  # web_portal, simulated_email, mobile
+    source = Column(String(50), default="web_portal", nullable=False)  # web_portal, simulated_email, mobile, whatsapp
+    contact_phone = Column(String(30), nullable=True, index=True)
     status = Column(String(50), default="submitted", nullable=False)  # submitted, triaged, correlated, resolved, rejected
     incident_id = Column(String(36), nullable=True, index=True)
     ai_extracted_meta = Column(Text, nullable=True)  # JSON metadata from AI extractor
