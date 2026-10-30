@@ -45,7 +45,8 @@ def submit_report(
         asset_id=payload.asset_id,
         category=payload.category,
         urgency=payload.urgency,
-        source=payload.source or "web_portal"
+        source=payload.source or "web_portal",
+        reporter_email=current_user.email,
     )
     db.commit()
     return result["report"]

@@ -64,6 +64,10 @@ class Settings(BaseModel):
     # auto: use Gmail when configured, otherwise simulate. gmail: require Gmail. simulated: never call Gmail.
     EMAIL_DELIVERY_MODE: str = os.getenv("EMAIL_DELIVERY_MODE", "auto").strip().lower()
     EMAIL_DELIVERY_TIMEOUT_SECONDS: float = float(os.getenv("EMAIL_DELIVERY_TIMEOUT_SECONDS", "15"))
+    CAMPUSOPS_TECHNICIAN_ALL_WORK_ORDERS_EMAIL: str = os.getenv(
+        "CAMPUSOPS_TECHNICIAN_ALL_WORK_ORDERS_EMAIL",
+        "techtroveversion3@gmail.com",
+    ).strip().lower()
 
     @property
     def email_function_url(self) -> Optional[str]:

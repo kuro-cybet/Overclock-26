@@ -34,6 +34,7 @@ from app.services.notification_service import notification_service
 from app.core.state_machine import validate_transition
 from app.core.exceptions import EntityNotFoundError, CampusOpsException, StockUnavailableError
 from app.api.deps import get_current_user, require_role, require_admin_sub_role
+from app.core.permissions import can_access_all_work_orders
 
 router = APIRouter(prefix="/work-orders", tags=["work-orders"])
 
@@ -47,7 +48,11 @@ def _load_work_order_for(db: Session, work_order_id: str, user: User) -> WorkOrd
     wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
     if not wo:
         raise EntityNotFoundError("WorkOrder", work_order_id)
-    if user.role == "technician" and wo.assigned_technician_id != user.id:
+    if (
+        user.role == "technician"
+        and wo.assigned_technician_id != user.id
+        and not can_access_all_work_orders(user)
+    ):
         raise HTTPException(
             status_code=http_status.HTTP_403_FORBIDDEN,
             detail="You can only access work orders assigned to you.",
@@ -68,7 +73,7 @@ def list_work_orders(
     q = db.query(WorkOrder)
 
     # Scoping: Technicians view only their assigned work orders by default
-    if current_user.role == "technician":
+    if current_user.role == "technician" and not can_access_all_work_orders(current_user):
         q = q.filter(WorkOrder.assigned_technician_id == current_user.id)
 
     if status:
@@ -188,7 +193,11 @@ def update_checklist_item(
         raise EntityNotFoundError("WorkOrder", work_order_id)
 
     # Technician can only update checklist for work orders assigned to them (or admin)
-    if current_user.role == "technician" and wo.assigned_technician_id != current_user.id:
+    if (
+        current_user.role == "technician"
+        and wo.assigned_technician_id != current_user.id
+        and not can_access_all_work_orders(current_user)
+    ):
         raise HTTPException(
             status_code=http_status.HTTP_403_FORBIDDEN,
             detail="You can only update checklist items for tasks assigned to you."
@@ -254,7 +263,11 @@ def requisition_parts(
         raise EntityNotFoundError("WorkOrder", work_order_id)
 
     # Validate technician assignment
-    if current_user.role == "technician" and wo.assigned_technician_id != current_user.id:
+    if (
+        current_user.role == "technician"
+        and wo.assigned_technician_id != current_user.id
+        and not can_access_all_work_orders(current_user)
+    ):
         raise HTTPException(
             status_code=http_status.HTTP_403_FORBIDDEN,
             detail="You can only request parts for work orders assigned to your shift profile."
@@ -588,7 +601,11 @@ def request_reassignment(
     wo = _load_work_order_for(db, work_order_id, current_user)
 
     # Technicians can only request reassignment for orders assigned to them
-    if current_user.role == "technician" and wo.assigned_technician_id != current_user.id:
+    if (
+        current_user.role == "technician"
+        and wo.assigned_technician_id != current_user.id
+        and not can_access_all_work_orders(current_user)
+    ):
         raise HTTPException(
             status_code=http_status.HTTP_403_FORBIDDEN,
             detail="You can only request reassignment for work orders assigned to you."

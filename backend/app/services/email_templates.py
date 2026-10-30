@@ -41,15 +41,32 @@ def report_received(
     reporter_name: str,
     link: str,
     incident_code: Optional[str] = None,
+    incident_created: bool = False,
+    work_order_code: Optional[str] = None,
+    technician_name: Optional[str] = None,
 ) -> tuple:
     if incident_code:
-        subject = f"CampusOps: Report {report_code} linked to {incident_code}"
+        subject = f"CampusOps: Report {report_code} tracked as {incident_code}"
         opening = (
-            "Thanks for the report. It matched an existing campus incident, so it "
-            "has been linked to that incident and the assigned team can see it."
+            f"Thanks for the report. A new incident ({incident_code}) was created "
+            "to track it."
+            if incident_created
+            else (
+                "Thanks for the report. It matched an existing campus incident, "
+                "so it has been linked to that incident."
+            )
         )
         next_steps = [
-            "Facilities already has an active work order for this incident.",
+            (
+                f"Work order {work_order_code} has been assigned to "
+                f"{technician_name}."
+                if work_order_code and technician_name
+                else (
+                    f"Work order {work_order_code} is waiting for a technician."
+                    if work_order_code
+                    else "Facilities will create a work order for this incident."
+                )
+            ),
             "You will receive another email when the work is resolved.",
         ]
     else:
@@ -78,6 +95,10 @@ def report_received(
 
     if incident_code:
         lines.append(f"Incident: {incident_code}")
+    if work_order_code:
+        lines.append(f"Work order: {work_order_code}")
+    if technician_name:
+        lines.append(f"Assigned technician: {technician_name}")
 
     lines.extend(["", "What happens next:"])
     lines.extend(f"{index}. {step}" for index, step in enumerate(next_steps, start=1))
@@ -99,14 +120,21 @@ def admin_new_report(
     submitted_at: Optional[datetime],
     link: str,
     incident_code: Optional[str] = None,
+    incident_created: bool = False,
+    work_order_code: Optional[str] = None,
+    technician_name: Optional[str] = None,
 ) -> tuple:
     subject = (
-        f"CampusOps: New report {report_code} linked to {incident_code}"
+        f"CampusOps: New report {report_code} tracked as {incident_code}"
         if incident_code
         else f"CampusOps: Action needed - {report_code} is waiting for triage"
     )
     opening = (
-        f"A new report was linked to existing incident {incident_code}."
+        (
+            f"A new report created incident {incident_code}."
+            if incident_created
+            else f"A new report was linked to existing incident {incident_code}."
+        )
         if incident_code
         else "A new report needs triage."
     )
@@ -116,6 +144,12 @@ def admin_new_report(
             "",
             f"Report: {report_code}",
             *([f"Incident: {incident_code}"] if incident_code else []),
+            *([f"Work order: {work_order_code}"] if work_order_code else []),
+            *(
+                [f"Assigned technician: {technician_name}"]
+                if technician_name
+                else []
+            ),
             f"Title: {title}",
             f"Category: {category}",
             f"Urgency: {urgency} ({priority})",

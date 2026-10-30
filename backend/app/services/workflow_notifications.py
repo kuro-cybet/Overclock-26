@@ -159,6 +159,10 @@ def report_submitted(
     db: Session,
     report: Report,
     reporter_email: Optional[str] = None,
+    *,
+    incident_created: bool = False,
+    work_order: Optional[WorkOrder] = None,
+    technician: Optional[User] = None,
 ):
     """Acknowledge the reporter and, when untriaged, alert the facilities desk."""
     reporter = _user(db, report.reporter_id)
@@ -183,6 +187,9 @@ def report_submitted(
             reporter_name=reporter.name if reporter else email.split("@")[0],
             link=_link(_reporter_path(report)),
             incident_code=incident.incident_code if incident else None,
+            incident_created=incident_created,
+            work_order_code=work_order.work_order_code if work_order else None,
+            technician_name=technician.name if technician else None,
         )
         reporter_outbox = _queue_email(
             db, email, subject, body, "report_submitted"
@@ -199,7 +206,17 @@ def report_submitted(
             ),
             message=(
                 f"Your report '{report.title}' was added to incident "
-                f"{incident.incident_code}. You will be notified when it is resolved."
+                f"{incident.incident_code}. "
+                + (
+                    f"Work order {work_order.work_order_code} is assigned to "
+                    f"{technician.name}."
+                    if work_order and technician
+                    else (
+                        f"Work order {work_order.work_order_code} is awaiting a technician."
+                        if work_order
+                        else "You will be notified when work is scheduled."
+                    )
+                )
                 if incident
                 else (
                     f"Your report '{report.title}' is queued for facilities triage. "
@@ -245,6 +262,9 @@ def report_submitted(
             submitted_at=report.created_at,
             link=_link("/admin/incidents"),
             incident_code=incident.incident_code if incident else None,
+            incident_created=incident_created,
+            work_order_code=work_order.work_order_code if work_order else None,
+            technician_name=technician.name if technician else None,
         )
         _email(db, admin, subject, body, "report_submitted")
 

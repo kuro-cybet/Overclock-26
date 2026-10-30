@@ -1,5 +1,5 @@
 import json
-import uuid
+from datetime import datetime
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 from app.database.models.report import Report
@@ -8,8 +8,8 @@ from app.database.models.campus import Building
 from app.database.models.room import Room
 from app.database.models.asset import Asset
 from app.services.ai_service import ai_service
-from app.services import workflow_notifications
-from app.core.exceptions import CampusOpsException
+from app.services import workflow_notifications, work_order_service
+from app.services.sla_service import sla_service
 
 class IntakeService:
     def process_incoming_report(
@@ -83,6 +83,35 @@ class IntakeService:
                 Incident.category == final_category,
                 Incident.status.in_(["open", "in_progress", "pending_parts"])
             ).first()
+        incident_created = existing_incident is None
+
+        if incident_created:
+            now = datetime.utcnow()
+            incident_count = db.query(Incident).count()
+            existing_incident = Incident(
+                incident_code=f"INC-{now.strftime('%Y%m')}-{incident_count + 1:04d}",
+                title=title,
+                description=description,
+                category=final_category,
+                severity=final_urgency,
+                priority=computed_priority,
+                building_id=resolved_building_id,
+                room_id=resolved_room_id,
+                asset_id=resolved_asset_id,
+                status="open",
+                sla_due_at=sla_service.calculate_deadline(computed_priority, now),
+                is_sla_breached=False,
+                correlated_count=1,
+                summary=f"Incident created automatically from a new report: {title}.",
+            )
+            db.add(existing_incident)
+            db.flush()
+        else:
+            existing_incident.correlated_count += 1
+            existing_incident.summary = (
+                f"Aggregated {existing_incident.correlated_count} reports for "
+                f"{existing_incident.category} issue."
+            )
 
         # 5. Persist the Report
         report_count = db.query(Report).count()
@@ -101,30 +130,43 @@ class IntakeService:
             reporter_role=reporter_role,
             source=source,
             contact_phone=contact_phone,
-            status="correlated" if existing_incident else "submitted",
-            incident_id=existing_incident.id if existing_incident else None,
+            status="correlated",
+            incident_id=existing_incident.id,
             ai_extracted_meta=json.dumps(ai_extraction)
         )
         db.add(report)
         db.flush()
 
-        # If duplicate matched to existing incident, increment correlation count
-        if existing_incident:
-            existing_incident.correlated_count += 1
-            existing_incident.summary = f"Aggregated {existing_incident.correlated_count} reports for {existing_incident.category} issue."
-            db.flush()
+        work_order, technician = work_order_service.ensure_work_order_for_incident(
+            db,
+            existing_incident,
+            actor_id=reporter_id,
+        )
 
-        # Acknowledge the reporter (in-app + email) and alert the facilities desk
-        # when the report still needs triage.  The caller commits the transaction.
+        # Keep the ticket, dispatch, and email acknowledgment in one transaction.
         reporter_outbox = workflow_notifications.report_submitted(
-            db, report, reporter_email=reporter_email
+            db,
+            report,
+            reporter_email=reporter_email,
+            incident_created=incident_created,
+            work_order=work_order,
+            technician=technician,
+        )
+        workflow_notifications.report_triaged(
+            db,
+            report,
+            existing_incident,
+            work_order=work_order,
+            technician=technician,
         )
 
         return {
             "report": report,
             "ai_extraction": ai_extraction,
-            "matched_existing_incident": existing_incident is not None,
-            "incident_id": existing_incident.id if existing_incident else None,
+            "matched_existing_incident": not incident_created,
+            "incident_id": existing_incident.id,
+            "work_order_id": work_order.id,
+            "assigned_technician_id": work_order.assigned_technician_id,
             "outbox_id": reporter_outbox.id if reporter_outbox else None,
         }
 

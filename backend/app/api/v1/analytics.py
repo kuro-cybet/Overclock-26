@@ -12,6 +12,7 @@ from app.database.models.user import User
 from app.services.analytics_service import analytics_service
 from app.api.deps import get_current_user, require_admin_sub_role
 from app.schemas.analytics import PortalDashboardResponse
+from app.core.permissions import can_access_all_work_orders
 
 router = APIRouter(prefix="", tags=["analytics-and-dashboard"])
 
@@ -100,7 +101,12 @@ def get_portal_dashboard(
         }
 
     elif portal == "technician":
-        my_orders = db.query(WorkOrder).filter(WorkOrder.assigned_technician_id == current_user.id).all()
+        order_query = db.query(WorkOrder)
+        if not can_access_all_work_orders(current_user):
+            order_query = order_query.filter(
+                WorkOrder.assigned_technician_id == current_user.id
+            )
+        my_orders = order_query.order_by(WorkOrder.created_at.desc()).all()
         assigned_cnt = sum(1 for w in my_orders if w.status == "assigned")
         in_progress_cnt = sum(1 for w in my_orders if w.status == "in_progress")
         completed_cnt = sum(1 for w in my_orders if w.status == "completed")

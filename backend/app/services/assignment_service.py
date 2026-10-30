@@ -7,6 +7,7 @@ from app.database.models.incident import Incident
 from app.database.models.work_order import WorkOrder
 from app.database.models.explanation import DecisionExplanation
 from app.services import workflow_notifications
+from app.core.permissions import can_access_all_work_orders
 from app.core.exceptions import CampusOpsException
 
 class AssignmentService:
@@ -35,7 +36,7 @@ class AssignmentService:
 
             # Check if all or at least one required skill is present
             has_skills = any(s.lower() in [sk.lower() for sk in skills_list] for s in required_skills) if required_skills else True
-            if not has_skills:
+            if not has_skills and not can_access_all_work_orders(user):
                 continue
 
             # Calculate match score based on skills, building locality, shift, workload

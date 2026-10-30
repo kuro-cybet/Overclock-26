@@ -18,4 +18,6 @@ def test_technician_permissions():
     assert has_permission("technician", "maintenance_technician", "view:technician_dashboard") is True
     assert has_permission("technician", "maintenance_technician", "update:work_order_status") is True
     assert has_permission("technician", "janitor", "perform:cleaning") is True
-
+    assert has_permission("technician", "all_skills_technician", "perform:repairs") is True
+    assert has_permission("technician", "all_skills_technician", "perform:cleaning") is True
+    assert has_permission("technician", "all_skills_technician", "inspect:room_equipment") is True

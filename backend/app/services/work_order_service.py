@@ -151,6 +151,21 @@ def ensure_work_order_for_incident(
         .first()
     )
     if existing:
+        if not existing.assigned_technician_id and auto_assign:
+            try:
+                existing = assignment_service.assign_technician_to_work_order(
+                    db,
+                    work_order_id=existing.id,
+                )
+            except CampusOpsException as exc:
+                logger.warning(
+                    "[WorkOrder] Auto-dispatch retry failed for %s: %s",
+                    existing.work_order_code,
+                    exc.detail,
+                )
+                workflow_notifications.work_order_unassigned(
+                    db, existing, incident, reason=str(exc.detail)
+                )
         return existing, _technician(db, existing.assigned_technician_id)
 
     return create_work_order_for_incident(

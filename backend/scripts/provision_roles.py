@@ -65,12 +65,30 @@ DEMO_ACCOUNTS = [
         "email": "techtroveversion3@gmail.com",
         "name": "Tech Trove",
         "role": "technician",
-        "sub_role": "maintenance_technician",
+        "sub_role": "all_skills_technician",
         "department": "Facilities",
     },
 ]
 
-TECH_SKILLS = ["network", "hardware", "electrical", "exam_setup", "hvac"]
+TECH_SKILLS = [
+    "network",
+    "wifi",
+    "cabling",
+    "router_config",
+    "hardware",
+    "electrical",
+    "power_distribution",
+    "exam_setup",
+    "classroom_readiness",
+    "av_equipment",
+    "hvac",
+    "plumbing",
+    "water_systems",
+    "sanitary_maintenance",
+    "general_cleaning",
+    "sanitation",
+    "waste_management",
+]
 
 ROLE_ASSIGNMENT_MODELS = {
     "admin": models.AdminAssignment,

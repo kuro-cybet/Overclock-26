@@ -43,6 +43,12 @@ export const TechnicianDashboard: React.FC = () => {
   useEffect(() => {
     loadDashboard();
     loadInventory();
+    const refresh = window.setInterval(() => {
+      api.getDashboard('technician').then(setData).catch((err) => {
+        console.error('Failed to refresh technician work queue', err);
+      });
+    }, 15000);
+    return () => window.clearInterval(refresh);
   }, []);
 
   const loadInventory = async () => {

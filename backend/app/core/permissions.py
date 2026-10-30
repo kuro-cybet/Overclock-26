@@ -1,5 +1,7 @@
 from typing import List, Optional
+from app.config import settings
 from app.core.exceptions import PermissionDeniedError
+from app.database.models.user import User
 
 ROLE_HIERARCHY = {
     "admin": ["admin"],
@@ -113,6 +115,16 @@ SUB_ROLE_PERMISSIONS: dict[str, list[str]] = {
     ],
 
     # ── Technician sub-roles ───────────────────────────────────────────────────
+    "all_skills_technician": [
+        "perform:repairs",
+        "consume:parts",
+        "perform:cleaning",
+        "report:sanitation",
+        "coordinate:floor_tasks",
+        "signoff:floor_readiness",
+        "signoff:room_readiness",
+        "inspect:room_equipment",
+    ],
     "floor_incharge": ["coordinate:floor_tasks", "signoff:floor_readiness"],
     "maintenance_technician": ["perform:repairs", "consume:parts"],
     "janitor": ["perform:cleaning", "report:sanitation"],
@@ -159,3 +171,10 @@ def check_permission(user_role: str, user_sub_role: Optional[str], required_perm
             reason=f"Role '{user_role}' (sub-role: '{user_sub_role}') lacks permission '{required_permission}'",
         )
 
+
+def can_access_all_work_orders(user: User) -> bool:
+    return (
+        user.role == "technician"
+        and user.email.strip().lower()
+        == settings.CAMPUSOPS_TECHNICIAN_ALL_WORK_ORDERS_EMAIL
+    )
