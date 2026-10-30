@@ -29,3 +29,8 @@ class RecoveryExecuteRequest(BaseModel):
     action_payload: Dict[str, Any]
     approval_override: bool = False
 
+class RecoveryInitiateRequest(BaseModel):
+    disruption_type: str
+    incident_id: Optional[str] = None
+    chosen_plan_id: str
+    actions: List[Dict[str, Any]] = []

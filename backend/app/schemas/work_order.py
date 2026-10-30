@@ -27,6 +27,29 @@ class WorkOrderRequestReassignment(BaseModel):
     urgency: Optional[str] = "normal"
     notes: Optional[str] = None
 
+class ChecklistItemResponse(BaseModel):
+    id: str
+    work_order_id: str
+    task_description: str
+    step_order: int
+    is_completed: bool
+    completed_at: Optional[datetime] = None
+    completed_by_id: Optional[str] = None
+    verification_notes: Optional[str] = None
+    verification_status: str
+
+    class Config:
+        from_attributes = True
+
+class ChecklistItemUpdate(BaseModel):
+    is_completed: bool
+    verification_notes: Optional[str] = None
+
+class PartsRequisitionRequest(BaseModel):
+    item_id: str
+    quantity: int = 1
+    justification: Optional[str] = None
+
 class WorkOrderResponse(BaseModel):
     id: str
     work_order_code: str
@@ -48,4 +71,3 @@ class WorkOrderResponse(BaseModel):
 
     class Config:
         from_attributes = True
-

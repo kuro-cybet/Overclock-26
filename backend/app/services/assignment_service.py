@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database.models.staff import StaffProfile
 from app.database.models.user import User
 from app.database.models.work_order import WorkOrder
+from app.database.models.explanation import DecisionExplanation
 from app.core.exceptions import CampusOpsException
 
 class AssignmentService:
@@ -96,6 +97,31 @@ class AssignmentService:
         wo.status = "assigned"
         if reassign_reason:
             wo.diagnosis = f"Reassigned: {reassign_reason}"
+
+        # Record transparent Decision Explanation
+        selected_user = db.query(User).filter(User.id == selected_tech_id).first()
+        tech_name = selected_user.name if selected_user else "Technician"
+        expl = DecisionExplanation(
+            decision_type="technician_dispatch",
+            entity_type="work_order",
+            entity_id=wo.id,
+            actor_id=selected_tech_id,
+            chosen_option=f"{tech_name} ({selected_tech_id})",
+            alternative_options_json="[]",
+            factors_json=json.dumps({
+                "workload": staff_prof.current_workload,
+                "shift": staff_prof.shift,
+                "skills": staff_prof.skills,
+                "reassign_reason": reassign_reason
+            }),
+            explanation_text=(
+                f"Dispatched {tech_name} to {wo.work_order_code}. "
+                f"Matched required skills with current workload ({staff_prof.current_workload} active tasks) "
+                f"and active shift ({staff_prof.shift})."
+            ),
+            confidence_score=0.92
+        )
+        db.add(expl)
 
         db.flush()
         return wo
