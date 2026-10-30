@@ -4,8 +4,17 @@ from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.asset import Asset
 from app.core.exceptions import EntityNotFoundError
+from app.services.predictive_maintenance_service import predictive_maintenance_service
 
 router = APIRouter(prefix="/assets", tags=["assets"])
+
+@router.get("/predictive-overview")
+def get_predictive_fleet_overview(db: Session = Depends(get_db)):
+    """
+    Fleet-wide predictive maintenance status: healthy, attention required,
+    high risk assets, 30-day failure probabilities, and upcoming PM schedules.
+    """
+    return predictive_maintenance_service.get_fleet_predictive_overview(db=db)
 
 @router.get("")
 def list_assets(
@@ -31,3 +40,10 @@ def get_asset(asset_id: str, db: Session = Depends(get_db)):
         raise EntityNotFoundError("Asset", asset_id)
     return asset
 
+@router.get("/{asset_id}/predictive-health")
+def get_asset_predictive_health(asset_id: str, db: Session = Depends(get_db)):
+    """Detailed statistical health evaluation and 30-day failure risk for a specific asset."""
+    asset = db.query(Asset).filter(Asset.id == asset_id).first()
+    if not asset:
+        raise EntityNotFoundError("Asset", asset_id)
+    return predictive_maintenance_service.evaluate_asset_health(db=db, asset=asset)

@@ -7,7 +7,13 @@ import { Wrench, RefreshCw, UserCheck, ShieldAlert, AlertTriangle, Send, CheckCi
 
 export const WorkOrdersView: React.FC = () => {
   const { user } = useAuth();
-  const isTechnician = user?.role === 'technician';
+  const isAdmin = user?.role?.toLowerCase() === 'admin' || user?.role?.toLowerCase() === 'system_admin';
+  const isTechnician = !isAdmin ||
+    user?.role?.toLowerCase() === 'technician' ||
+    user?.role?.toLowerCase()?.includes('technician') ||
+    user?.sub_role?.toLowerCase()?.includes('technician') ||
+    user?.sub_role?.toLowerCase()?.includes('incharge') ||
+    user?.sub_role?.toLowerCase()?.includes('janitor');
 
   const [workOrders, setWorkOrders] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);

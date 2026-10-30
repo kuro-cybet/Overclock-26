@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -9,6 +9,12 @@ class BookingCreate(BaseModel):
     start_time: datetime
     end_time: datetime
     equipment_required: Optional[List[str]] = []
+
+class ExamReadinessInspectionRequest(BaseModel):
+    status: str  # ready, fault_detected
+    checklist: Dict[str, bool]
+    notes: Optional[str] = None
+    reported_faults: Optional[List[str]] = None
 
 class BookingResponse(BaseModel):
     id: str
@@ -27,4 +33,3 @@ class BookingResponse(BaseModel):
 
     class Config:
         from_attributes = True
-

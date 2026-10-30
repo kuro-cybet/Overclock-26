@@ -2,11 +2,12 @@ from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
-from app.database.models.notification import Notification
+from app.database.models.notification import Notification, NotificationOutbox
 from app.database.models.user import User
 from app.schemas.notification import NotificationResponse
 from app.core.exceptions import EntityNotFoundError
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_admin_sub_role
+from app.services.notification_service import notification_service
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -47,3 +48,20 @@ def mark_all_read(
     db.commit()
     return {"status": "all_marked_read"}
 
+@router.post("/outbox/process")
+def process_outbox_queue(
+    current_user: User = Depends(require_admin_sub_role(["system_admin"])),
+    db: Session = Depends(get_db)
+):
+    """Triggers background processing of pending notifications in the outbox."""
+    return notification_service.process_pending_outbox(db=db)
+
+@router.get("/outbox/status")
+def get_outbox_status(
+    current_user: User = Depends(require_admin_sub_role(["system_admin"])),
+    db: Session = Depends(get_db)
+):
+    queued = db.query(NotificationOutbox).filter(NotificationOutbox.status == "queued").count()
+    sent = db.query(NotificationOutbox).filter(NotificationOutbox.status == "sent").count()
+    failed = db.query(NotificationOutbox).filter(NotificationOutbox.status == "failed").count()
+    return {"queued": queued, "sent": sent, "failed": failed}

@@ -96,6 +96,16 @@ export const StudentTransportHostelView: React.FC = () => {
         </div>
       </div>
 
+      {/* Demonstration Dataset Banner */}
+      <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-xs text-amber-900">
+        <span className="px-2 py-0.5 rounded-md bg-amber-200 font-black text-[10px] tracking-wide text-amber-900 shrink-0">
+          DEMONSTRATION DATASET
+        </span>
+        <p>
+          Bus shuttle schedules, seat capacity trackers, and hostel room assignments shown below are demonstration datasets for campus logistics.
+        </p>
+      </div>
+
       {/* Tabs */}
       <div className="flex space-x-2">
         {(['transport', 'hostel'] as const).map((t) => (
