@@ -49,8 +49,9 @@ ROLE_PERMISSIONS = {
 # system_admin is a superset of ALL admin permissions (full control)
 # ──────────────────────────────────────────────────────────────────────────────
 
-# The complete set of admin-domain permissions for reference
-_ALL_ADMIN_PERMISSIONS = [
+# The complete set of admin operational permissions for system_admin
+# (Note: Separation of duties means approve:procurement belongs exclusively to procurement_approver)
+_SYSTEM_ADMIN_PERMISSIONS = [
     "view:admin_dashboard",
     "view:all_incidents",
     "manage:incidents",
@@ -64,13 +65,9 @@ _ALL_ADMIN_PERMISSIONS = [
     "trigger:recovery",
     "manage:staff",
     "manage:inventory",
-    "approve:department_requests",
-    "approve:overrides",
-    "view:department_analytics",
     "manage:room_readiness",
     "override:room_status",
     "coordinate:facilities",
-    "approve:procurement",
     "view:inventory_costs",
     "manage:users",
     "manage:system_config",
@@ -78,8 +75,8 @@ _ALL_ADMIN_PERMISSIONS = [
 ]
 
 SUB_ROLE_PERMISSIONS: dict[str, list[str]] = {
-    # ── System Administrator: FULL access (superset of everything) ─────────────
-    "system_admin": _ALL_ADMIN_PERMISSIONS,
+    # ── System Administrator: FULL technical & operational control ─────────────
+    "system_admin": _SYSTEM_ADMIN_PERMISSIONS,
 
     # ── Department Manager: incidents, approvals, department analytics ─────────
     "department_manager": [
@@ -93,7 +90,7 @@ SUB_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "view:all_reports",
     ],
 
-    # ── Facilities Administrator: rooms, assets, campus readiness ──────────────
+    # ── Facilities Administrator: rooms, assets, campus readiness, work orders ─
     "facilities_admin": [
         "view:admin_dashboard",
         "manage:campus_assets",
@@ -101,6 +98,7 @@ SUB_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "manage:room_readiness",
         "override:room_status",
         "coordinate:facilities",
+        "manage:work_orders",
         "view:all_incidents",
         "view:all_reports",
     ],

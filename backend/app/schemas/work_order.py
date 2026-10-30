@@ -22,6 +22,11 @@ class WorkOrderReassignRequest(BaseModel):
     new_technician_id: str
     reassignment_reason: str
 
+class WorkOrderRequestReassignment(BaseModel):
+    reason: str
+    urgency: Optional[str] = "normal"
+    notes: Optional[str] = None
+
 class WorkOrderResponse(BaseModel):
     id: str
     work_order_code: str

@@ -5,14 +5,21 @@ import { useNavigate } from 'react-router-dom';
 
 interface RoleGuardProps {
   allowedRoles: string[];
+  allowedSubRoles?: string[];
   children: React.ReactNode;
 }
 
-export const RoleGuard: React.FC<RoleGuardProps> = ({ allowedRoles, children }) => {
+export const RoleGuard: React.FC<RoleGuardProps> = ({ allowedRoles, allowedSubRoles, children }) => {
   const { user, switchRole } = useAuth();
   const navigate = useNavigate();
 
-  if (!user || !allowedRoles.includes(user.role)) {
+  const roleAllowed = user && allowedRoles.includes(user.role);
+  // system_admin always has access to all admin operations
+  const subRoleAllowed =
+    !allowedSubRoles ||
+    (user && (user.sub_role === 'system_admin' || allowedSubRoles.includes(user.sub_role || '')));
+
+  if (!user || !roleAllowed || !subRoleAllowed) {
     return (
       <div className="min-h-screen bg-[#FFF4E9] flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 border border-red-200 text-center">
@@ -20,11 +27,19 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({ allowedRoles, children }) 
             <ShieldAlert size={36} />
           </div>
           <h2 className="text-2xl font-bold text-[#345873] mb-2">Restricted Access</h2>
-          <p className="text-gray-600 text-sm mb-6">
-            Your current role <span className="font-semibold text-[#345873] uppercase tracking-wide px-2 py-0.5 bg-gray-100 rounded">
-              {user?.role} {user?.sub_role ? `(${user.sub_role})` : ''}
-            </span> is not authorized to access this operational workspace.
+          <p className="text-gray-600 text-sm mb-4">
+            Your current sub-role{' '}
+            <span className="font-semibold text-[#345873] uppercase tracking-wide px-2 py-0.5 bg-gray-100 rounded">
+              {user?.sub_role ? user.sub_role.replace(/_/g, ' ') : user?.role || 'Guest'}
+            </span>{' '}
+            is not authorized to access this specific module.
           </p>
+          {allowedSubRoles && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6">
+              Only <strong>System Administrator</strong> or sub-roles{' '}
+              <span className="font-mono font-bold">[{allowedSubRoles.join(', ')}]</span> have access.
+            </p>
+          )}
 
           <div className="space-y-3">
             <p className="text-xs text-gray-500 font-medium">Quick switch to an authorized demo role:</p>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../core/api/client';
+import { useAuth } from '../../core/auth/AuthProvider';
 import { StatCard } from '../../shared/components/StatCard';
 import { StatusBadge } from '../../shared/components/StatusBadge';
 import { DataTable } from '../../shared/components/DataTable';
@@ -31,6 +32,7 @@ import {
 
 export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -119,21 +121,71 @@ export const AdminDashboard: React.FC = () => {
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-[#F29877]/20 text-[#d9673d]">
               Live Campus Command
             </span>
-            <span className="text-xs text-gray-400 font-medium">Real-Time Sync</span>
+            <span
+              className={`text-[11px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                user?.sub_role === 'system_admin'
+                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                  : 'bg-blue-100 text-blue-800 border border-blue-300'
+              }`}
+            >
+              {user?.sub_role === 'system_admin' ? '⚡ Full Admin Powers' : `🔒 Scoped Authority (${user?.sub_role?.replace(/_/g, ' ') || 'Admin'})`}
+            </span>
           </div>
           <h1 className="text-2xl font-black text-[#345873] mt-1">Operations Control Centre</h1>
           <p className="text-xs text-gray-500 mt-1">
-            Unified multi-role command oversight, AI intake telemetry, SLA monitoring, and cross-departmental coordination.
+            {user?.sub_role === 'system_admin'
+              ? 'Unrestricted root authority across all operational modules, simulations, staff schedules, and system overrides.'
+              : user?.sub_role === 'department_manager'
+              ? 'Department authorization authority: incident resolution, expenditure approvals, and SLA tracking.'
+              : user?.sub_role === 'facilities_admin'
+              ? 'Facilities authority: campus room readiness, building assets, and field work orders.'
+              : user?.sub_role === 'procurement_approver'
+              ? 'Procurement authority: inventory parts stock, parts reservations, and purchase approvals.'
+              : 'Unified multi-role command oversight, AI intake telemetry, and operational coordination.'}
           </p>
         </div>
 
-        <button
-          onClick={() => navigate('/admin/simulator')}
-          className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-[#F29877] to-[#e07b55] text-white text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer self-start md:self-auto"
-        >
-          <Play size={16} fill="white" />
-          <span>Launch Scenario Simulator</span>
-        </button>
+        {user?.sub_role === 'system_admin' ? (
+          <button
+            onClick={() => navigate('/admin/simulator')}
+            className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-[#F29877] to-[#e07b55] text-white text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer self-start md:self-auto"
+          >
+            <Play size={16} fill="white" />
+            <span>Launch Scenario Simulator</span>
+          </button>
+        ) : user?.sub_role === 'department_manager' ? (
+          <button
+            onClick={() => navigate('/admin/approvals')}
+            className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-[#345873] text-white text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer self-start md:self-auto"
+          >
+            <FileCheck size={16} />
+            <span>Review Approvals Queue</span>
+          </button>
+        ) : user?.sub_role === 'facilities_admin' ? (
+          <button
+            onClick={() => navigate('/admin/campus')}
+            className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-[#287D70] text-white text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer self-start md:self-auto"
+          >
+            <Building size={16} />
+            <span>Campus & Readiness Center</span>
+          </button>
+        ) : user?.sub_role === 'procurement_approver' ? (
+          <button
+            onClick={() => navigate('/admin/inventory')}
+            className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-[#A58ACF] text-white text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer self-start md:self-auto"
+          >
+            <Boxes size={16} />
+            <span>Inventory & Parts Requisitions</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => navigate('/admin/simulator')}
+            className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-[#F29877] to-[#e07b55] text-white text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer self-start md:self-auto"
+          >
+            <Play size={16} fill="white" />
+            <span>Launch Scenario Simulator</span>
+          </button>
+        )}
       </div>
 
       {/* KPI Cards (Page 4 Blueprint: Open incidents, SLA compliance, active work orders, room utilisation, parts shortages) */}

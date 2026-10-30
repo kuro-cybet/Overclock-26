@@ -55,14 +55,70 @@ export const router = createBrowserRouter([
         ),
         children: [
           { index: true, element: <AdminDashboard /> },
-          { path: 'incidents', element: <IncidentsView /> },
-          { path: 'campus', element: <CampusView /> },
-          { path: 'work-orders', element: <WorkOrdersView /> },
-          { path: 'inventory', element: <InventoryView /> },
-          { path: 'approvals', element: <ApprovalsView /> },
-          { path: 'staff', element: <StaffView /> },
-          { path: 'simulator', element: <ScenarioSimulatorView /> },
-          { path: 'analytics', element: <AnalyticsView /> }
+          {
+            path: 'incidents',
+            element: (
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['department_manager', 'facilities_admin']}>
+                <IncidentsView />
+              </RoleGuard>
+            )
+          },
+          {
+            path: 'campus',
+            element: (
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['facilities_admin']}>
+                <CampusView />
+              </RoleGuard>
+            )
+          },
+          {
+            path: 'work-orders',
+            element: (
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['facilities_admin']}>
+                <WorkOrdersView />
+              </RoleGuard>
+            )
+          },
+          {
+            path: 'inventory',
+            element: (
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['procurement_approver']}>
+                <InventoryView />
+              </RoleGuard>
+            )
+          },
+          {
+            path: 'approvals',
+            element: (
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['department_manager', 'procurement_approver']}>
+                <ApprovalsView />
+              </RoleGuard>
+            )
+          },
+          {
+            path: 'staff',
+            element: (
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={[]}>
+                <StaffView />
+              </RoleGuard>
+            )
+          },
+          {
+            path: 'simulator',
+            element: (
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={[]}>
+                <ScenarioSimulatorView />
+              </RoleGuard>
+            )
+          },
+          {
+            path: 'analytics',
+            element: (
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['department_manager']}>
+                <AnalyticsView />
+              </RoleGuard>
+            )
+          }
         ]
       },
       // Technician Portal Routes

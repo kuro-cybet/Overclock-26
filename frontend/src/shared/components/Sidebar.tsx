@@ -40,18 +40,26 @@ export const Sidebar: React.FC = () => {
   const role = user?.role || 'admin';
   const currentAccent = tokens.roleAccents[role as keyof typeof tokens.roleAccents] || tokens.roleAccents.admin;
 
-  // Navigation menus customized per role
-  const adminLinks: NavLinkItem[] = [
+  // Navigation menus customized per role and admin sub-role
+  const allAdminLinks: (NavLinkItem & { allowedSubRoles?: string[] })[] = [
     { to: '/admin', label: 'Operations Centre', icon: <LayoutDashboard size={22} /> },
-    { to: '/admin/incidents', label: 'Incidents & Triage', icon: <AlertTriangle size={22} /> },
-    { to: '/admin/campus', label: 'Campus & Facilities', icon: <Building2 size={22} /> },
-    { to: '/admin/work-orders', label: 'Work Orders', icon: <Wrench size={22} /> },
-    { to: '/admin/inventory', label: 'Inventory & Parts', icon: <Boxes size={22} /> },
-    { to: '/admin/approvals', label: 'Pending Approvals', icon: <FileCheck2 size={22} /> },
-    { to: '/admin/staff', label: 'Staff & Skills Matrix', icon: <Users size={22} /> },
-    { to: '/admin/simulator', label: 'Scenario Simulator', icon: <FlaskConical size={22} />, highlight: true },
-    { to: '/admin/analytics', label: 'Analytics & SLA', icon: <BarChart3 size={22} /> },
+    { to: '/admin/incidents', label: 'Incidents & Triage', icon: <AlertTriangle size={22} />, allowedSubRoles: ['system_admin', 'department_manager', 'facilities_admin'] },
+    { to: '/admin/campus', label: 'Campus & Facilities', icon: <Building2 size={22} />, allowedSubRoles: ['system_admin', 'facilities_admin'] },
+    { to: '/admin/work-orders', label: 'Work Orders', icon: <Wrench size={22} />, allowedSubRoles: ['system_admin', 'facilities_admin'] },
+    { to: '/admin/inventory', label: 'Inventory & Parts', icon: <Boxes size={22} />, allowedSubRoles: ['system_admin', 'procurement_approver'] },
+    { to: '/admin/approvals', label: 'Pending Approvals', icon: <FileCheck2 size={22} />, allowedSubRoles: ['system_admin', 'department_manager', 'procurement_approver'] },
+    { to: '/admin/staff', label: 'Staff & Skills Matrix', icon: <Users size={22} />, allowedSubRoles: ['system_admin'] },
+    { to: '/admin/simulator', label: 'Scenario Simulator', icon: <FlaskConical size={22} />, highlight: true, allowedSubRoles: ['system_admin'] },
+    { to: '/admin/analytics', label: 'Analytics & SLA', icon: <BarChart3 size={22} />, allowedSubRoles: ['system_admin', 'department_manager'] },
   ];
+
+  // Scoped admin links: only system_admin gets all admin powers, other admin roles get only their own domain
+  const adminLinks = allAdminLinks.filter((link) => {
+    if (!link.allowedSubRoles) return true;
+    const subRole = user?.sub_role || 'system_admin';
+    if (subRole === 'system_admin') return true;
+    return link.allowedSubRoles.includes(subRole);
+  });
 
   const technicianLinks: NavLinkItem[] = [
     { to: '/technician', label: 'Technician Hub', icon: <LayoutDashboard size={22} /> },
@@ -118,6 +126,19 @@ export const Sidebar: React.FC = () => {
           <p className="text-sm font-semibold text-slate-200 mt-1 truncate">
             {user?.sub_role ? user.sub_role.replace(/_/g, ' ') : user?.department || 'University Wide'}
           </p>
+          {role === 'admin' && (
+            <div className="mt-2 flex items-center">
+              <span
+                className={`text-[11px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                  user?.sub_role === 'system_admin'
+                    ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
+                    : 'bg-blue-400/20 text-blue-300 border border-blue-400/30'
+                }`}
+              >
+                {user?.sub_role === 'system_admin' ? '⚡ Full Authority' : '🔒 Scoped Authority'}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Navigation Items (Styled to match the requested image with large bold font and right chevrons) */}

@@ -35,10 +35,10 @@ export const LoginPage: React.FC = () => {
       color: tokens.roleAccents.admin.color,
       defaultEmail: 'admin@campusops.edu',
       subRoles: [
-        { name: 'System Administrator (Full Control)', email: 'admin@campusops.edu' },
-        { name: 'Department Manager (Authorizer)', email: 'dept_mgr@campusops.edu' },
-        { name: 'Facilities Admin (Readiness & Assets)', email: 'facilities@campusops.edu' },
-        { name: 'Procurement Approver (Purchases)', email: 'procurement@campusops.edu' }
+        { name: 'System Administrator (Full Admin Powers)', email: 'admin@campusops.edu' },
+        { name: 'Department Manager (Incidents, Approvals & Analytics)', email: 'dept_mgr@campusops.edu' },
+        { name: 'Facilities Admin (Campus, Rooms & Work Orders)', email: 'facilities@campusops.edu' },
+        { name: 'Procurement Approver (Inventory & Purchase Approvals)', email: 'procurement@campusops.edu' }
       ]
     },
     {

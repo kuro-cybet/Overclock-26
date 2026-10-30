@@ -71,6 +71,8 @@ export const api = {
     apiRequest(`/work-orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   reassignWorkOrder: (id: string, data: { new_technician_id: string; reassignment_reason: string }) =>
     apiRequest(`/work-orders/${id}/reassign`, { method: 'POST', body: JSON.stringify(data) }),
+  requestWorkOrderReassignment: (id: string, data: { reason: string; urgency?: string; notes?: string }) =>
+    apiRequest(`/work-orders/${id}/request-reassignment`, { method: 'POST', body: JSON.stringify(data) }),
 
   getStaff: () => apiRequest('/staff'),
   updateStaffStatus: (userId: string, status: string) =>

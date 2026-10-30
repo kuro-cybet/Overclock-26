@@ -1,14 +1,22 @@
 import json
 from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, status as http_status
+from fastapi import APIRouter, Depends, Query, HTTPException, status as http_status
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.work_order import WorkOrder
 from app.database.models.incident import Incident
 from app.database.models.inventory import StockReservation
+from app.database.models.approval import ApprovalRequest
+from app.database.models.notification import Notification
 from app.database.models.user import User
-from app.schemas.work_order import WorkOrderCreate, WorkOrderUpdate, WorkOrderReassignRequest, WorkOrderResponse
+from app.schemas.work_order import (
+    WorkOrderCreate,
+    WorkOrderUpdate,
+    WorkOrderReassignRequest,
+    WorkOrderRequestReassignment,
+    WorkOrderResponse
+)
 from app.services.assignment_service import assignment_service
 from app.core.state_machine import validate_transition
 from app.core.exceptions import EntityNotFoundError, CampusOpsException
@@ -133,6 +141,13 @@ def reassign_work_order(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # Technicians cannot directly reassign work orders; only request
+    if current_user.role == "technician":
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="Technicians are not authorized to directly reassign work orders. They can only submit a reassignment request."
+        )
+
     wo = assignment_service.assign_technician_to_work_order(
         db=db,
         work_order_id=work_order_id,
@@ -142,4 +157,57 @@ def reassign_work_order(
     db.commit()
     db.refresh(wo)
     return wo
+
+@router.post("/{work_order_id}/request-reassignment")
+def request_reassignment(
+    work_order_id: str,
+    payload: WorkOrderRequestReassignment,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
+    if not wo:
+        raise EntityNotFoundError("WorkOrder", work_order_id)
+
+    # Technicians can only request reassignment for orders assigned to them
+    if current_user.role == "technician" and wo.assigned_technician_id != current_user.id:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="You can only request reassignment for work orders assigned to you."
+        )
+
+    # 1. Create an ApprovalRequest of type 'reassignment'
+    approval = ApprovalRequest(
+        approval_type="reassignment",
+        target_entity_type="work_order",
+        target_entity_id=wo.id,
+        requester_id=current_user.id,
+        justification=f"{payload.reason}" + (f" | Additional Notes: {payload.notes}" if payload.notes else ""),
+        status="pending"
+    )
+    db.add(approval)
+
+    # 2. Issue targeted supervisory notification
+    notif = Notification(
+        recipient_id="admin",
+        recipient_role="admin",
+        title=f"Reassignment Requested: {wo.work_order_code}",
+        message=f"Technician {current_user.name} submitted a reassignment request for '{wo.title}'. Reason: {payload.reason}",
+        type="action_required",
+        link_url="/admin/work-orders"
+    )
+    db.add(notif)
+
+    # 3. Log into work order evidence notes
+    timestamp_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    req_tag = f"\n[Reassignment Requested by {current_user.name} ({timestamp_str}) — Reason: {payload.reason}]"
+    wo.evidence_notes = (wo.evidence_notes or "") + req_tag
+
+    db.commit()
+    return {
+        "status": "requested",
+        "work_order_id": wo.id,
+        "approval_id": approval.id,
+        "message": f"Reassignment request submitted to dispatch supervisor for work order {wo.work_order_code}."
+    }
 
