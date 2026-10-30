@@ -1,6 +1,6 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union, Literal
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 class BookingCreate(BaseModel):
     room_id: str
@@ -10,13 +10,23 @@ class BookingCreate(BaseModel):
     end_time: datetime
     equipment_required: Optional[List[str]] = []
 
+class ExamReadinessChecklist(BaseModel):
+    hvac_check: bool = True
+    power_check: bool = True
+    seating_check: bool = True
+    av_check: bool = True
+    acoustics_check: Optional[bool] = None
+    lighting_check: Optional[bool] = None
+
 class ExamReadinessInspectionRequest(BaseModel):
-    status: str  # ready, fault_detected
-    checklist: Dict[str, bool]
+    status: Literal["ready", "fault_detected"]
+    checklist: Union[ExamReadinessChecklist, Dict[str, bool]]
     notes: Optional[str] = None
     reported_faults: Optional[List[str]] = None
 
 class BookingResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     booking_code: str
     room_id: str
@@ -31,5 +41,31 @@ class BookingResponse(BaseModel):
     conflict_resolved_to_room_id: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+class ExaminationSessionResponse(BaseModel):
+    id: str
+    booking_code: str
+    title: str
+    purpose: str
+    start_time: str
+    end_time: str
+    hours_remaining: float
+    room_id: Optional[str] = None
+    room_number: str
+    room_name: str
+    building_name: str
+    room_status: str
+    daily_readiness_status: str
+    equipment_required: Optional[str] = None
+    has_open_incident: bool
+    incident_title: Optional[str] = None
+    status: str
+
+class ExamReadinessResponse(BaseModel):
+    status: str
+    readiness_status: str
+    booking_id: str
+    message: str
+    room_number: str
+    inspected_by: str
+    timestamp: str
+    incident_code: Optional[str] = None

@@ -1,44 +1,58 @@
 import json
-from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, HTTPException, status as http_status
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, Query, status as http_status
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.work_order import WorkOrder
+from app.database.models.work_order_checklist import WorkOrderChecklistItem
 from app.database.models.incident import Incident
-from app.database.models.inventory import StockReservation, InventoryItem
+from app.database.models.inventory import InventoryItem, StockReservation
+from app.database.models.inventory_transaction import InventoryTransaction
 from app.database.models.approval import ApprovalRequest, ProcurementRequest
 from app.database.models.notification import Notification
 from app.database.models.user import User
-from app.database.models.work_order_checklist import WorkOrderChecklistItem
-from app.database.models.inventory_transaction import InventoryTransaction
 from app.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
+    WorkOrderResponse,
     WorkOrderReassignRequest,
     WorkOrderRequestReassignment,
-    WorkOrderResponse,
+    WorkOrderRequestReassignmentResponse,
+    WorkOrderDetailsResponse,
     ChecklistItemResponse,
     ChecklistItemUpdate,
-    PartsRequisitionRequest
+    PartsRequisitionRequest,
+    PartsRequisitionResponse
 )
-from app.services.assignment_service import assignment_service
 from app.services.inventory_service import inventory_service
+from app.services.assignment_service import assignment_service
 from app.services.event_service import event_service
 from app.core.state_machine import validate_transition
-from app.core.exceptions import EntityNotFoundError, CampusOpsException, StockUnavailableError
+from app.core.exceptions import EntityNotFoundError
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/work-orders", tags=["work-orders"])
 
-@router.get("", response_model=List[WorkOrderResponse])
+@router.get(
+    "",
+    response_model=List[WorkOrderResponse],
+    summary="List Work Orders",
+    description="Retrieves active maintenance work orders. Technicians view their own assigned work orders automatically.",
+    responses={
+        401: {"description": "Authentication required"}
+    }
+)
 def list_work_orders(
-    status: Optional[str] = Query(None),
-    priority: Optional[str] = Query(None),
-    limit: int = 100,
+    status: Optional[str] = Query(None, description="Filter by status: `assigned`, `in_progress`, `blocked`, `completed`, `cancelled`"),
+    priority: Optional[str] = Query(None, description="Filter by priority: `P1`, `P2`, `P3`, `P4`"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum work orders to return"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    List work orders with role-based scoping and filtering.
+    """
     q = db.query(WorkOrder)
 
     # Scoping: Technicians view only their assigned work orders by default
@@ -53,15 +67,37 @@ def list_work_orders(
     work_orders = q.order_by(WorkOrder.created_at.desc()).limit(limit).all()
     return work_orders
 
-@router.get("/{work_order_id}", response_model=WorkOrderResponse)
+@router.get(
+    "/{work_order_id}",
+    response_model=WorkOrderResponse,
+    summary="Get Work Order by ID",
+    description="Retrieves a single work order by its unique UUID.",
+    responses={
+        404: {"description": "Work order not found"}
+    }
+)
 def get_work_order(work_order_id: str, db: Session = Depends(get_db)):
+    """
+    Retrieve single work order entity.
+    """
     wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
     if not wo:
         raise EntityNotFoundError("WorkOrder", work_order_id)
     return wo
 
-@router.get("/{work_order_id}/details")
+@router.get(
+    "/{work_order_id}/details",
+    response_model=WorkOrderDetailsResponse,
+    summary="Get Comprehensive Work Order Details",
+    description="Retrieves a complete work order dossier including the parent incident, assigned technician, parts reservations, and persistent checklist tasks.",
+    responses={
+        404: {"description": "Work order not found"}
+    }
+)
 def get_work_order_details(work_order_id: str, db: Session = Depends(get_db)):
+    """
+    Retrieve full work order dossier with checklist steps and inventory holdings.
+    """
     wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
     if not wo:
         raise EntityNotFoundError("WorkOrder", work_order_id)
@@ -79,11 +115,22 @@ def get_work_order_details(work_order_id: str, db: Session = Depends(get_db)):
         "checklists": checklists
     }
 
-@router.get("/{work_order_id}/checklist", response_model=List[ChecklistItemResponse])
+@router.get(
+    "/{work_order_id}/checklist",
+    response_model=List[ChecklistItemResponse],
+    summary="Get Work Order Checklist Items",
+    description="Returns the sequential persistent checklist steps for a work order. Seeds standard diagnostic and safety steps if none currently exist.",
+    responses={
+        404: {"description": "Work order not found"}
+    }
+)
 def get_work_order_checklist(
     work_order_id: str,
     db: Session = Depends(get_db)
 ):
+    """
+    List checklist items for work order execution.
+    """
     wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
     if not wo:
         raise EntityNotFoundError("WorkOrder", work_order_id)
@@ -118,7 +165,17 @@ def get_work_order_checklist(
 
     return items
 
-@router.patch("/{work_order_id}/checklist/{item_id}", response_model=ChecklistItemResponse)
+@router.patch(
+    "/{work_order_id}/checklist/{item_id}",
+    response_model=ChecklistItemResponse,
+    summary="Update Checklist Task Completion Status",
+    description="Marks a checklist task as completed or incomplete. Enforces technician ownership and records immutable audit log events.",
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Forbidden: Task not assigned to calling technician"},
+        404: {"description": "Work order or checklist item not found"}
+    }
+)
 def update_checklist_item(
     work_order_id: str,
     item_id: str,
@@ -126,6 +183,9 @@ def update_checklist_item(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Update completion status of a single checklist task.
+    """
     item = (
         db.query(WorkOrderChecklistItem)
         .filter(WorkOrderChecklistItem.id == item_id, WorkOrderChecklistItem.work_order_id == work_order_id)
@@ -180,13 +240,26 @@ def update_checklist_item(
     db.refresh(item)
     return item
 
-@router.post("/{work_order_id}/parts-requisition")
+@router.post(
+    "/{work_order_id}/parts-requisition",
+    response_model=PartsRequisitionResponse,
+    summary="Requisition Spare Parts for Work Order",
+    description="Requests required spare parts for a work order. Reserves stock if available on-site, or stages an emergency procurement request if out of stock.",
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Forbidden: Not assigned to this work order"},
+        404: {"description": "Work order or inventory item not found"}
+    }
+)
 def requisition_parts(
     work_order_id: str,
     payload: PartsRequisitionRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Requisition parts with automated stock reservation or emergency procurement escalation.
+    """
     wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
     if not wo:
         raise EntityNotFoundError("WorkOrder", work_order_id)
@@ -288,12 +361,23 @@ def requisition_parts(
             "message": f"Insufficient stock ({available} available). Emergency procurement staged and {wo.work_order_code} flagged as blocked."
         }
 
-@router.post("", response_model=WorkOrderResponse)
+@router.post(
+    "",
+    response_model=WorkOrderResponse,
+    summary="Create Work Order",
+    description="Creates a work order linked to an active incident and seeds required checklists.",
+    responses={
+        401: {"description": "Authentication required"}
+    }
+)
 def create_work_order(
     payload: WorkOrderCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Create a new maintenance work order.
+    """
     wo_count = db.query(WorkOrder).count()
     wo = WorkOrder(
         work_order_code=f"WO-{datetime.utcnow().strftime('%Y%m')}-{wo_count + 1:04d}",
@@ -302,19 +386,14 @@ def create_work_order(
         description=payload.description,
         assigned_technician_id=payload.assigned_technician_id,
         priority=payload.priority or "P3",
-        status="assigned",
-        required_skills=json.dumps(payload.required_skills or []),
-        sla_deadline=payload.sla_deadline,
-        checklist=json.dumps([
-            {"task": "Site physical inspection & safety power lock-out", "done": False},
-            {"task": "Hardware diagnostic scan and fault component isolation", "done": False},
-            {"task": "Functional load testing and operational verification signoff", "done": False}
-        ])
+        status="assigned" if payload.assigned_technician_id else "unassigned",
+        required_skills=json.dumps(payload.required_skills) if payload.required_skills else None,
+        sla_deadline=payload.sla_deadline
     )
     db.add(wo)
     db.flush()
 
-    # Create persistent WorkOrderChecklistItem rows
+    # Pre-seed default checklist items for new work orders
     default_tasks = [
         "Site physical inspection & safety power lock-out",
         "Hardware diagnostic scan and fault component isolation",
@@ -334,13 +413,26 @@ def create_work_order(
     db.refresh(wo)
     return wo
 
-@router.patch("/{work_order_id}", response_model=WorkOrderResponse)
+@router.patch(
+    "/{work_order_id}",
+    response_model=WorkOrderResponse,
+    summary="Update Work Order State & Evidence",
+    description="Updates work order status, diagnosis, notes, or checklist. Strictly enforces mandatory checklist completion before allowing transition to 'completed'.",
+    responses={
+        401: {"description": "Authentication required"},
+        404: {"description": "Work order not found"},
+        422: {"description": "Incomplete checklist tasks or invalid state transition"}
+    }
+)
 def update_work_order(
     work_order_id: str,
     payload: WorkOrderUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Update work order status and verify checklist enforcement before completion.
+    """
     wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
     if not wo:
         raise EntityNotFoundError("WorkOrder", work_order_id)
@@ -390,13 +482,26 @@ def update_work_order(
     db.refresh(wo)
     return wo
 
-@router.post("/{work_order_id}/reassign", response_model=WorkOrderResponse)
+@router.post(
+    "/{work_order_id}/reassign",
+    response_model=WorkOrderResponse,
+    summary="Directly Reassign Work Order",
+    description="Administrative endpoint to reassign a work order to a different technician. Technicians cannot invoke this directly (must use request-reassignment).",
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Technicians forbidden from direct reassignment"},
+        404: {"description": "Work order not found"}
+    }
+)
 def reassign_work_order(
     work_order_id: str,
     payload: WorkOrderReassignRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Directly reassign work order to another technician (supervisor/admin only).
+    """
     # Technicians cannot directly reassign work orders; only request
     if current_user.role == "technician":
         raise HTTPException(
@@ -414,13 +519,26 @@ def reassign_work_order(
     db.refresh(wo)
     return wo
 
-@router.post("/{work_order_id}/request-reassignment")
+@router.post(
+    "/{work_order_id}/request-reassignment",
+    response_model=WorkOrderRequestReassignmentResponse,
+    summary="Submit Work Order Reassignment Request",
+    description="Allows an assigned field technician to request reassignment (e.g., due to illness, shift end, or specialized skill requirement). Creates a supervisory approval request.",
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Order not assigned to calling technician"},
+        404: {"description": "Work order not found"}
+    }
+)
 def request_reassignment(
     work_order_id: str,
     payload: WorkOrderRequestReassignment,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Submit supervisory reassignment request for an active work order.
+    """
     wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
     if not wo:
         raise EntityNotFoundError("WorkOrder", work_order_id)

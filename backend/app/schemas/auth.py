@@ -11,6 +11,15 @@ class UserSummary(BaseModel):
     building_id: Optional[str] = None
     floor_id: Optional[str] = None
 
+class DemoAccountResponse(BaseModel):
+    id: str
+    email: str
+    name: str
+    role: str
+    sub_role: Optional[str] = None
+    department: Optional[str] = None
+    password: str = "password123"
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str

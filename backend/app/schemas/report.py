@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 class ReportCreate(BaseModel):
     title: str
@@ -13,6 +13,8 @@ class ReportCreate(BaseModel):
     source: Optional[str] = "web_portal"
 
 class ReportResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     report_code: str
     title: str
@@ -30,7 +32,3 @@ class ReportResponse(BaseModel):
     ai_extracted_meta: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
-

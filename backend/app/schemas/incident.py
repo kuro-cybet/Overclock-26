@@ -1,6 +1,8 @@
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+from app.schemas.report import ReportResponse
+from app.schemas.work_order import WorkOrderResponse
 
 class IncidentCreate(BaseModel):
     title: str
@@ -18,6 +20,8 @@ class IncidentCorrelateRequest(BaseModel):
     new_title: Optional[str] = None
 
 class IncidentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     incident_code: str
     title: str
@@ -37,6 +41,7 @@ class IncidentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-
+class IncidentDetailsResponse(BaseModel):
+    incident: IncidentResponse
+    reports: List[ReportResponse] = []
+    work_orders: List[WorkOrderResponse] = []

@@ -15,7 +15,9 @@ from app.database.models.user import User
 from app.schemas.booking import (
     BookingCreate,
     BookingResponse,
-    ExamReadinessInspectionRequest
+    ExaminationSessionResponse,
+    ExamReadinessInspectionRequest,
+    ExamReadinessResponse
 )
 from app.services.booking_service import booking_service
 from app.services.event_service import event_service
@@ -25,15 +27,23 @@ from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 
-@router.get("", response_model=List[BookingResponse])
+@router.get(
+    "",
+    response_model=List[BookingResponse],
+    summary="List Room Bookings",
+    description="Retrieves scheduled room reservations across campus with multi-parameter filtering."
+)
 def list_bookings(
-    room_id: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
-    user_id: Optional[str] = Query(None),
-    purpose: Optional[str] = Query(None),
-    limit: int = 100,
+    room_id: Optional[str] = Query(None, description="Filter by room UUID"),
+    status: Optional[str] = Query(None, description="Filter by status: `confirmed`, `tentative`, `cancelled`, `completed`"),
+    user_id: Optional[str] = Query(None, description="Filter by booking creator user UUID"),
+    purpose: Optional[str] = Query(None, description="Filter by purpose: `examination`, `lecture`, `lab_session`, `meeting`, `seminar`"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum bookings to return"),
     db: Session = Depends(get_db)
 ):
+    """
+    List scheduled bookings with timetable and room allocation data.
+    """
     q = db.query(RoomBooking)
     if room_id:
         q = q.filter(RoomBooking.room_id == room_id)
@@ -46,12 +56,19 @@ def list_bookings(
     bookings = q.order_by(RoomBooking.start_time.asc()).limit(limit).all()
     return bookings
 
-@router.get("/examinations")
+@router.get(
+    "/examinations",
+    response_model=List[ExaminationSessionResponse],
+    summary="List Scheduled Examinations with Room Readiness",
+    description="Retrieves upcoming examination sessions enriched with assigned room operational status, active infrastructure incidents, and daily readiness flags."
+)
 def list_examination_sessions(
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200, description="Maximum examination sessions to return"),
     db: Session = Depends(get_db)
 ):
-    """Lists scheduled examinations enriched with room details and current readiness."""
+    """
+    Lists scheduled examinations enriched with room details and current readiness.
+    """
     bookings = (
         db.query(RoomBooking)
         .filter(RoomBooking.purpose == "examination", RoomBooking.status != "cancelled")
@@ -62,11 +79,11 @@ def list_examination_sessions(
 
     results = []
     now = datetime.utcnow()
+
     for b in bookings:
         room = db.query(Room).filter(Room.id == b.room_id).first()
         building = db.query(Building).filter(Building.id == room.building_id).first() if room else None
 
-        # Check for open incidents in room
         active_incident = (
             db.query(Incident)
             .filter(
@@ -100,12 +117,24 @@ def list_examination_sessions(
 
     return results
 
-@router.post("", response_model=BookingResponse)
+@router.post(
+    "",
+    response_model=BookingResponse,
+    summary="Create Room Reservation",
+    description="Reserves a classroom, lab, or examination hall with automated conflict detection and double-booking prevention.",
+    responses={
+        401: {"description": "Authentication required"},
+        409: {"description": "Conflict: Target room is already reserved for this time interval"}
+    }
+)
 def create_booking(
     payload: BookingCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Reserve a campus room with automated double-booking prevention.
+    """
     booking = booking_service.create_booking(
         db=db,
         user_id=current_user.id,
@@ -121,7 +150,17 @@ def create_booking(
     db.refresh(booking)
     return booking
 
-@router.post("/{booking_id}/exam-readiness")
+@router.post(
+    "/{booking_id}/exam-readiness",
+    response_model=ExamReadinessResponse,
+    summary="Submit Examination Readiness Inspection",
+    description="Submits a structured pre-exam physical inspection checklist (HVAC, power, seating, AV). If faults are discovered, automatically creates an emergency incident and alerts facilities dispatch.",
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Forbidden: Only faculty or administrators may submit exam inspections"},
+        404: {"description": "Booking or room not found"}
+    }
+)
 def submit_exam_readiness_inspection(
     booking_id: str,
     payload: ExamReadinessInspectionRequest,
@@ -149,6 +188,7 @@ def submit_exam_readiness_inspection(
         raise EntityNotFoundError("Room", booking.room_id)
 
     timestamp_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    checklist_dict = payload.checklist.model_dump() if hasattr(payload.checklist, "model_dump") else payload.checklist
 
     if payload.status == "ready":
         # Mark room confirmed today
@@ -163,7 +203,7 @@ def submit_exam_readiness_inspection(
             entity_type="room_booking",
             entity_id=booking.id,
             severity="info",
-            payload={"room": room.room_number, "inspector": current_user.name, "checklist": payload.checklist},
+            payload={"room": room.room_number, "inspector": current_user.name, "checklist": checklist_dict},
             actor_id=current_user.id
         )
 

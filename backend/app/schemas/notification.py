@@ -1,8 +1,10 @@
 from typing import Optional
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 class NotificationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     recipient_id: str
     recipient_role: str
@@ -13,10 +15,9 @@ class NotificationResponse(BaseModel):
     link_url: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 class OutboxResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     recipient_email: str
     channel: str
@@ -27,6 +28,17 @@ class OutboxResponse(BaseModel):
     last_attempt_at: Optional[datetime] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+class ReadAllResponse(BaseModel):
+    status: str
 
+class OutboxProcessResponse(BaseModel):
+    processed: int
+    sent: int
+    failed: int
+    skipped_backoff: int
+    timestamp: str
+
+class OutboxStatusResponse(BaseModel):
+    queued: int
+    sent: int
+    failed: int

@@ -8,8 +8,23 @@ from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    summary="Authenticate User and Generate JWT Token",
+    description="Authenticates campus user with university email and password, returning a signed JWT Bearer access token and user profile summary.",
+    responses={
+        401: {"description": "Incorrect email or password"}
+    }
+)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    """
+    Authenticate user credentials.
+
+    - **email**: Valid registered campus email address.
+    - **password**: Plaintext password checked against argon2/bcrypt password hash.
+    - Returns signed JWT token with sub-role claims and active session profile.
+    """
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
@@ -39,8 +54,21 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         user=user_summary
     )
 
-@router.get("/me", response_model=UserSummary)
+@router.get(
+    "/me",
+    response_model=UserSummary,
+    summary="Get Authenticated User Profile",
+    description="Returns the profile and role metadata of the currently authenticated bearer token owner.",
+    responses={
+        401: {"description": "Missing, expired, or invalid authorization token"}
+    }
+)
 def get_me(current_user: User = Depends(get_current_user)):
+    """
+    Retrieve profile details for current active session.
+
+    Requires HTTP Bearer token in the `Authorization` header.
+    """
     return UserSummary(
         id=current_user.id,
         email=current_user.email,
@@ -51,4 +79,3 @@ def get_me(current_user: User = Depends(get_current_user)):
         building_id=current_user.building_id,
         floor_id=current_user.floor_id
     )
-
