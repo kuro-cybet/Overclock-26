@@ -9,7 +9,12 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database.connection import get_db
 from app.database.models.audit import AuditLog
-from app.database.models.role_assignment import RoleAssignment
+from app.database.models.role_assignment import (
+    AdminAssignment,
+    FacultyAssignment,
+    StudentAssignment,
+    TechnicianAssignment,
+)
 from app.database.models.user import User
 from app.core.security import verify_password, create_access_token
 from app.schemas.auth import (
@@ -97,9 +102,7 @@ def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)):
     Sign in with a Google Identity Services ID token.
 
     The role is **never** taken from the client. It is looked up from the
-    server-side ``role_assignments`` allowlist by verified email, so only the
-    accounts an administrator assigned can obtain a token, and each one can
-    only ever get its assigned role.
+    server-side role-specific allowlists by verified email.
     """
     if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(
@@ -129,19 +132,33 @@ def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)):
             detail="Google did not return a verified email address.",
         )
 
-    assignment = (
-        db.query(RoleAssignment)
-        .filter(RoleAssignment.email == email, RoleAssignment.is_active.is_(True))
-        .first()
-    )
-    if not assignment:
+    assignments = []
+    for assignment_model in (
+        AdminAssignment,
+        TechnicianAssignment,
+        FacultyAssignment,
+        StudentAssignment,
+    ):
+        assignment = (
+            db.query(assignment_model)
+            .filter(
+                assignment_model.email == email,
+                assignment_model.is_active.is_(True),
+            )
+            .first()
+        )
+        if assignment:
+            assignments.append(assignment)
+
+    if len(assignments) != 1:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                "This Google account has not been assigned a CampusOps role. "
+                "This Google account must have exactly one active CampusOps role assignment. "
                 "Contact the system administrator."
             ),
         )
+    assignment = assignments[0]
 
     user = db.query(User).filter(User.email == email).first()
     if not user:
@@ -151,14 +168,14 @@ def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)):
             # never match a hash produced by hash_password().
             hashed_password="!",
             name=claims.get("name") or email.split("@")[0],
-            role=assignment.role,
+            role=assignment.ROLE,
             created_at=datetime.utcnow(),
         )
         db.add(user)
         db.flush()
 
     user.name = user.name or claims.get("name") or email.split("@")[0]
-    user.role = assignment.role
+    user.role = assignment.ROLE
     user.sub_role = assignment.sub_role
     user.department = assignment.department or user.department
     user.building_id = assignment.building_id or user.building_id

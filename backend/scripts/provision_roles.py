@@ -9,10 +9,10 @@ the local SQLite file or against Supabase Postgres:
 
 What it does (idempotent, safe to re-run):
 
-1. Creates any missing tables (including ``role_assignments``) and adds the
-   OAuth columns to an existing ``users`` table.
-2. Upserts the four real demo accounts, one per role, and records them in
-   ``role_assignments`` so Google sign-in can grant the right role server-side.
+1. Creates any missing role-specific allowlist tables and adds the OAuth
+   columns to an existing ``users`` table.
+2. Migrates the legacy ``role_assignments`` table, if present, then upserts the
+   four demo accounts into their corresponding role-specific tables.
 3. Gives the technician a staff profile so auto-dispatch can consider them.
 4. Soft-deactivates every seeded @campusops.edu student/faculty/admin (and,
    unless --keep-seeded-technicians is passed, the seeded technicians).
@@ -35,9 +35,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.config import settings  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.database.base import Base  # noqa: E402
+from app.database.schema_migrations import migrate_role_assignments  # noqa: E402
 import app.database.models as models  # noqa: E402
 
-# The emails supplied for the demo. Role is granted from this table only.
+# The emails supplied for the demo. Role is granted from the matching table only.
 DEMO_ACCOUNTS = [
     {
         "email": "rajesekersudharsan@gmail.com",
@@ -70,6 +71,13 @@ DEMO_ACCOUNTS = [
 ]
 
 TECH_SKILLS = ["network", "hardware", "electrical", "exam_setup", "hvac"]
+
+ROLE_ASSIGNMENT_MODELS = {
+    "admin": models.AdminAssignment,
+    "technician": models.TechnicianAssignment,
+    "faculty": models.FacultyAssignment,
+    "student": models.StudentAssignment,
+}
 
 # Columns added to an existing `users` table (create_all never alters tables).
 NEW_USER_COLUMNS = {
@@ -126,15 +134,15 @@ def upsert_accounts(db, password: str) -> None:
     for spec in DEMO_ACCOUNTS:
         email = spec["email"].lower()
 
+        assignment_model = ROLE_ASSIGNMENT_MODELS[spec["role"]]
         assignment = (
-            db.query(models.RoleAssignment)
-            .filter(models.RoleAssignment.email == email)
+            db.query(assignment_model)
+            .filter(assignment_model.email == email)
             .first()
         )
         if not assignment:
-            assignment = models.RoleAssignment(email=email, created_at=datetime.utcnow())
+            assignment = assignment_model(email=email, created_at=datetime.utcnow())
             db.add(assignment)
-        assignment.role = spec["role"]
         assignment.sub_role = spec["sub_role"]
         assignment.department = spec["department"]
         assignment.is_active = True
@@ -250,6 +258,7 @@ def main() -> int:
         connect_args={"check_same_thread": False} if is_sqlite else {},
     )
     Base.metadata.create_all(bind=engine)
+    migrate_role_assignments(engine)
 
     added = ensure_user_columns(engine)
     if added:

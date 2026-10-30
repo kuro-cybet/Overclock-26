@@ -1,8 +1,8 @@
 """Google sign-in contract.
 
 The client only ever sends Google's ID token. The server decides the role from
-the ``role_assignments`` allowlist, so an unassigned Google account can never
-obtain a CampusOps token.
+the matching role-specific allowlist, so an unassigned Google account can
+never obtain a CampusOps token.
 """
 
 from datetime import datetime
@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from app.config import settings
 from app.database.connection import SessionLocal
-from app.database.models.role_assignment import RoleAssignment
+from app.database.models.role_assignment import AdminAssignment, StudentAssignment
 from app.main import app
 
 client = TestClient(app)
@@ -69,11 +69,10 @@ def test_google_login_rejects_unassigned_account(monkeypatch):
 def test_google_login_grants_allowlisted_role(monkeypatch):
     email = "student@campusops.edu"
     db = SessionLocal()
-    db.query(RoleAssignment).filter(RoleAssignment.email == email).delete()
+    db.query(StudentAssignment).filter(StudentAssignment.email == email).delete()
     db.add(
-        RoleAssignment(
+        StudentAssignment(
             email=email,
-            role="student",
             is_active=True,
             created_at=datetime.utcnow(),
         )
@@ -91,6 +90,27 @@ def test_google_login_grants_allowlisted_role(monkeypatch):
         assert body["access_token"]
     finally:
         db = SessionLocal()
-        db.query(RoleAssignment).filter(RoleAssignment.email == email).delete()
+        db.query(StudentAssignment).filter(StudentAssignment.email == email).delete()
+        db.commit()
+        db.close()
+
+
+def test_google_login_rejects_account_assigned_to_multiple_roles(monkeypatch):
+    email = "multi-role@campusops.edu"
+    db = SessionLocal()
+    db.add(StudentAssignment(email=email, is_active=True, created_at=datetime.utcnow()))
+    db.add(AdminAssignment(email=email, is_active=True, created_at=datetime.utcnow()))
+    db.commit()
+    db.close()
+
+    try:
+        _fake_claims(monkeypatch, email)
+        response = client.post("/api/v1/auth/google", json={"credential": "fake"})
+        assert response.status_code == 403, response.text
+        assert "exactly one" in response.json()["detail"]
+    finally:
+        db = SessionLocal()
+        db.query(StudentAssignment).filter(StudentAssignment.email == email).delete()
+        db.query(AdminAssignment).filter(AdminAssignment.email == email).delete()
         db.commit()
         db.close()

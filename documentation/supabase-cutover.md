@@ -41,6 +41,23 @@ Use `--no-lockdown` if you ever need the anon key to read a table directly.
 
 ## 3. Provision the demo accounts
 
+If Supabase already has the legacy `public.role_assignments` table, first run
+[`20261031010000_split_role_assignments.sql`](../supabase/supabase/migrations/20261031010000_split_role_assignments.sql)
+in the Supabase SQL Editor. It creates the four role-specific tables and copies
+the existing rows without dropping the old table, so the current backend keeps
+working during deployment. Resolve any duplicate or unsupported roles reported
+by the SQL before continuing.
+
+Deploy the backend that reads the four tables, verify Google sign-in, and then
+drop the old table in Supabase SQL Editor:
+
+```sql
+DROP TABLE public.role_assignments;
+```
+
+The provisioning command below can also migrate and remove the old table while
+upserting the demo accounts.
+
 ```powershell
 python scripts/provision_roles.py --password "<DB_PASSWORD>"
 ```
@@ -48,7 +65,7 @@ python scripts/provision_roles.py --password "<DB_PASSWORD>"
 This is idempotent. It:
 
 * creates/updates the four demo accounts,
-* records each one in `role_assignments` (the server-side RBAC allowlist),
+* records each one in its role-specific allowlist table,
 * gives the technician a staff profile for auto-dispatch, and
 * soft-deactivates the seeded `@campusops.edu` people (`is_active = false`).
 
@@ -99,7 +116,9 @@ Redeploy both. `backend/data/campusops.db` is no longer read once
 
 The frontend renders Google's official **Continue with Google** button and sends
 the ID token to `POST /api/v1/auth/google`. The server verifies the token,
-requires a verified email, and reads the role **only** from `role_assignments`.
+requires a verified email, and reads the role **only** from the matching role-specific
+allowlist table (`admin_assignments`, `technician_assignments`,
+`faculty_assignments`, or `student_assignments`).
 An unassigned Google account gets `403`, and no role value is ever accepted from
 the client.
 
@@ -124,4 +143,3 @@ accounts, and confirm:
 * **Continue with Google** appears, and each assigned Google account lands in
   its own portal,
 * an unassigned Google account is refused.
-

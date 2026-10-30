@@ -68,9 +68,11 @@ Open **http://localhost:5173** in your browser.
 
 ## 🔑 Demo Access
 
-Sign-in uses **Continue with Google**. Only Google accounts assigned a role in
-the server-side `role_assignments` allowlist can enter, and the server picks the
-portal from that assignment — the client never sends a role.
+Sign-in uses **Continue with Google**. Only Google accounts listed in the
+matching server-side role allowlist (`admin_assignments`,
+`technician_assignments`, `faculty_assignments`, or `student_assignments`) can
+enter, and the server picks the portal from that table — the client never sends
+a role.
 
 | Portal | Google account |
 | --- | --- |
@@ -203,4 +205,3 @@ CampusOps/
 ├── .gitignore
 └── README.md
 ```
-

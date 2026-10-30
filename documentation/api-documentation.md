@@ -40,7 +40,8 @@ Authenticates a user against persistent database records and issues a 24-hour si
 ### `POST /auth/google`
 Signs in with a Google Identity Services ID token. The server verifies the token
 against `GOOGLE_CLIENT_ID`, requires a verified email, and reads the role
-**only** from the `role_assignments` allowlist. The client never sends a role.
+**only** from the corresponding role-specific allowlist table. The client
+never sends a role.
 
 ```json
 {
@@ -49,7 +50,7 @@ against `GOOGLE_CLIENT_ID`, requires a verified email, and reads the role
 ```
 
 * `401` — invalid/expired token, or unverified email
-* `403` — Google account has no active CampusOps role assignment
+* `403` — Google account does not have exactly one active CampusOps role assignment
 * `503` — Google sign-in is not configured on the server
 
 ### `GET /auth/me`
@@ -130,4 +131,3 @@ Triggers one of the 4 blueprint disruption scenarios:
 
 ### `POST /simulations/reset`
 Restores the pristine university seed baseline without leaving orphaned records.
-

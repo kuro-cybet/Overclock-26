@@ -2,7 +2,7 @@
 
 Sign-in uses **Continue with Google**. There are no shared passwords and no
 one-click persona buttons: the server looks up the role for the signed-in
-Google email in the `role_assignments` allowlist.
+Google email in that role's dedicated allowlist table.
 
 | Portal | Google account | Role / sub-role |
 | :--- | :--- | :--- |
