@@ -1,4 +1,37 @@
-const API_BASE = '/api/v1';
+/**
+ * CampusOps Frontend API Client
+ * Robust communication layer handling environment-based URL resolution,
+ * authentication headers, and resilient parsing of JSON, non-JSON, and empty responses.
+ */
+
+export function getApiBaseUrl(): string {
+  const envUrl = (import.meta.env.VITE_API_URL || '').trim();
+  if (envUrl) {
+    const clean = envUrl.replace(/\/+$/, '');
+    if (clean.endsWith('/api/v1')) return clean;
+    if (clean.endsWith('/api')) return `${clean}/v1`;
+    return `${clean}/api/v1`;
+  }
+
+  if (typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname;
+    const isLocalhost =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '::1' ||
+      hostname === '';
+
+    // If running in deployed production environment (Render, Vercel, Netlify, etc.)
+    if (!isLocalhost) {
+      return 'https://campusops-u6yt.onrender.com/api/v1';
+    }
+  }
+
+  // Local development fallback proxied by Vite
+  return '/api/v1';
+}
+
+export const API_BASE = getApiBaseUrl();
 
 export class ApiError extends Error {
   status: number;
@@ -21,24 +54,76 @@ export async function apiRequest<T = any>(
     ...(options.headers || {}),
   };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const baseUrl = getApiBaseUrl();
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const targetUrl = `${baseUrl}${normalizedEndpoint}`;
 
-  if (!response.ok) {
-    let errorDetail = response.statusText;
-    let data;
-    try {
-      data = await response.json();
-      errorDetail = data.detail || JSON.stringify(data);
-    } catch {
-      // ignore
-    }
-    throw new ApiError(errorDetail, response.status, data);
+  let response: Response;
+  try {
+    response = await fetch(targetUrl, {
+      ...options,
+      headers,
+    });
+  } catch (networkError: any) {
+    throw new ApiError(
+      `Network connection failed when contacting backend (${baseUrl}): ${networkError?.message || 'Server unreachable'}`,
+      0,
+      null
+    );
   }
 
-  return response.json();
+  // Read response text safely to prevent "Unexpected end of JSON input" error crashes
+  const rawText = await response.text();
+  const hasBody = Boolean(rawText && rawText.trim().length > 0);
+
+  let parsedData: any = null;
+  if (hasBody) {
+    try {
+      parsedData = JSON.parse(rawText);
+    } catch {
+      parsedData = null;
+    }
+  }
+
+  // Handle non-2xx HTTP responses
+  if (!response.ok) {
+    let errorDetail = response.statusText || `Request failed with status ${response.status}`;
+
+    if (parsedData) {
+      if (typeof parsedData.detail === 'string') {
+        errorDetail = parsedData.detail;
+      } else if (Array.isArray(parsedData.detail)) {
+        errorDetail = parsedData.detail.map((d: any) => d.msg || JSON.stringify(d)).join(', ');
+      } else if (parsedData.message) {
+        errorDetail = parsedData.message;
+      } else {
+        errorDetail = JSON.stringify(parsedData);
+      }
+    } else if (hasBody) {
+      // Strip HTML if an HTML error page (e.g. 502/504 Bad Gateway or SPA 404) was returned
+      const sanitized = rawText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      errorDetail = sanitized.slice(0, 160) || errorDetail;
+    }
+
+    throw new ApiError(errorDetail, response.status, parsedData);
+  }
+
+  // Handle empty successful responses (HTTP 204 No Content or empty 200)
+  if (!hasBody || response.status === 204) {
+    return {} as T;
+  }
+
+  // Return parsed JSON payload
+  if (parsedData !== null) {
+    return parsedData as T;
+  }
+
+  // If response is 200 OK but body is not valid JSON (e.g. static hosting SPA index.html fallback)
+  throw new ApiError(
+    `Received non-JSON response from server (${targetUrl}). Please verify the backend API is deployed and reachable.`,
+    response.status,
+    rawText
+  );
 }
 
 export const api = {
