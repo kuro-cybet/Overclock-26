@@ -25,6 +25,9 @@ from app.database.models.maintenance import AssetMaintenanceHistory, PreventiveM
 from app.database.models.impact import IncidentImpactRecord
 from app.database.models.explanation import DecisionExplanation
 
+# WhatsApp AI Assistant Models
+from app.database.models.whatsapp import WhatsAppUserLink, WhatsAppConversation, WhatsAppMessageLog
+
 __all__ = [
     "User",
     "Building",
@@ -60,4 +63,8 @@ __all__ = [
     "PreventiveMaintenanceSchedule",
     "IncidentImpactRecord",
     "DecisionExplanation",
+    # WhatsApp
+    "WhatsAppUserLink",
+    "WhatsAppConversation",
+    "WhatsAppMessageLog",
 ]

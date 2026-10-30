@@ -30,6 +30,7 @@ from app.services.inventory_service import inventory_service
 from app.services.assignment_service import assignment_service
 from app.services.event_service import event_service
 from app.services import work_order_service, workflow_notifications
+from app.services.notification_service import notification_service
 from app.core.state_machine import validate_transition
 from app.core.exceptions import EntityNotFoundError, CampusOpsException, StockUnavailableError
 from app.api.deps import get_current_user, require_role, require_admin_sub_role
@@ -475,6 +476,11 @@ def update_work_order(
                 workflow_notifications.work_in_progress(db, wo, inc)
 
         wo.status = payload.status
+        try:
+            notif_st = 'resolved' if payload.status == 'completed' else payload.status
+            notification_service.notify_ticket_state_change(db=db, incident_id=wo.incident_id, new_status=notif_st)
+        except Exception:
+            pass
 
     db.commit()
     db.refresh(wo)

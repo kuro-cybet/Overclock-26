@@ -9,6 +9,12 @@ from app.core.outbox_worker import outbox_worker
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Ensure all tables exist
+    from app.database.base import Base
+    from app.database.connection import engine
+    import app.database.models  # noqa: F401
+    Base.metadata.create_all(bind=engine)
+
     # Safe non-blocking startup of background notification outbox worker
     await outbox_worker.start()
     yield

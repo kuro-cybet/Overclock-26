@@ -73,4 +73,22 @@ class Settings(BaseModel):
             return None
         return f"{self.SUPABASE_URL.rstrip('/')}/functions/v1/{self.SUPABASE_EMAIL_FUNCTION}"
 
+    # WhatsApp Cloud API Configuration
+    WHATSAPP_ACCESS_TOKEN: Optional[str] = os.getenv("WHATSAPP_ACCESS_TOKEN", None)
+    WHATSAPP_PHONE_NUMBER_ID: Optional[str] = os.getenv("WHATSAPP_PHONE_NUMBER_ID", None)
+    WHATSAPP_BUSINESS_ACCOUNT_ID: Optional[str] = os.getenv("WHATSAPP_BUSINESS_ACCOUNT_ID", None)
+    WHATSAPP_VERIFY_TOKEN: str = os.getenv("WHATSAPP_VERIFY_TOKEN", "campusops_verify_token_2026")
+    WHATSAPP_APP_SECRET: Optional[str] = os.getenv("WHATSAPP_APP_SECRET", None)
+    WHATSAPP_API_VERSION: str = os.getenv("WHATSAPP_API_VERSION", "v21.0")
+
+    # AI Service Configuration (ngrok HTTPS or local microservice)
+    AI_SERVICE_URL: str = os.getenv("AI_SERVICE_URL", "http://127.0.0.1:8001")
+    AI_SERVICE_TOKEN: str = os.getenv("AI_SERVICE_TOKEN", "campusops_ai_secret_token_2026")
+    AI_MODEL: str = os.getenv("AI_MODEL", "qwen-local")
+    AI_TIMEOUT_SECONDS: int = int(os.getenv("AI_TIMEOUT_SECONDS", "60"))
+
+    # Web Search Configuration
+    WEB_SEARCH_PROVIDER: str = os.getenv("WEB_SEARCH_PROVIDER", "duckduckgo")
+    WEB_SEARCH_API_KEY: Optional[str] = os.getenv("WEB_SEARCH_API_KEY", None)
+
 settings = Settings()
