@@ -1,5 +1,5 @@
-from typing import Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Dict, Any, Literal
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.incident import Incident
@@ -11,6 +11,7 @@ from app.database.models.approval import ApprovalRequest
 from app.database.models.user import User
 from app.services.analytics_service import analytics_service
 from app.api.deps import get_current_user, require_admin_sub_role
+from app.schemas.analytics import PortalDashboardResponse
 
 router = APIRouter(prefix="", tags=["analytics-and-dashboard"])
 

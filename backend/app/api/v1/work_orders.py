@@ -9,6 +9,7 @@ from app.database.models.work_order_checklist import WorkOrderChecklistItem
 from app.database.models.incident import Incident
 from app.database.models.report import Report
 from app.database.models.inventory import StockReservation, InventoryItem
+from app.database.models.inventory_transaction import InventoryTransaction
 from app.database.models.approval import ApprovalRequest, ProcurementRequest
 from app.database.models.notification import Notification
 from app.database.models.user import User

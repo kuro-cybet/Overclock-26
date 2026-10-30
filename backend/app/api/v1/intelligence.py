@@ -10,6 +10,7 @@ from app.services.intelligence_service import (
 from app.services.operational_intelligence_service import operational_intelligence_service
 from app.database.models.user import User
 from app.api.deps import require_role
+from app.schemas.intelligence import DecisionExplanationResponse
 
 router = APIRouter(prefix="/intelligence", tags=["intelligence"])
 

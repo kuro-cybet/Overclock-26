@@ -6,6 +6,7 @@ from app.database.models.notification import NotificationOutbox
 from app.database.models.user import User
 from app.integrations.simulated_email import simulated_email_service
 from app.schemas.notification import OutboxResponse
+from app.schemas.integration import IncomingEmailPayload, SimulatedEmailProcessResponse
 from app.api.deps import require_admin_sub_role, require_inbound_email_access
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])

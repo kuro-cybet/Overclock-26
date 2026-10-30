@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import time
 from fastapi import Depends, HTTPException, Request, status, Header
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.database.connection import get_db
@@ -94,7 +95,22 @@ async def require_inbound_email_access(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = get_current_user(authorization=authorization, db=db)
+    token = authorization.replace("Bearer ", "").strip()
+    payload = decode_access_token(token)
+    if not payload or "sub" not in payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired authentication credentials.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = db.query(User).filter(User.id == payload["sub"]).first()
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account does not exist or has been deactivated.",
+        )
+
     if user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -123,32 +139,9 @@ def require_admin_sub_role(allowed_sub_roles: List[str]):
     Non-admin roles or unauthorized sub-roles get 403 Forbidden.
     """
     def sub_role_checker(
-        auth_credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-        authorization: Optional[str] = Header(None, description="Optional raw Authorization header fallback"),
-        db: Session = Depends(get_db)
+        current_user: User = Depends(get_current_user)
     ) -> User:
-        if not authorization:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication token is missing.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        payload = decode_access_token(token)
-        if not payload or "sub" not in payload:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired authentication credentials.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        user_id = payload["sub"]
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user or not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User account does not exist or has been deactivated.",
-            )
+        user = current_user
 
         if user.role != "admin":
             raise HTTPException(

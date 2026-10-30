@@ -6,7 +6,7 @@ from app.database.connection import get_db
 from app.database.models.approval import ProcurementRequest, ApprovalRequest
 from app.database.models.inventory import InventoryItem
 from app.database.models.user import User
-from app.schemas.inventory import ProcurementCreateRequest
+from app.schemas.inventory import ProcurementCreateRequest, ProcurementCreateResponse
 from app.api.deps import require_role
 
 router = APIRouter(prefix="/procurement", tags=["procurement"])

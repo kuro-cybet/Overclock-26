@@ -7,6 +7,7 @@ from app.core.exceptions import EntityNotFoundError
 from app.services.predictive_maintenance_service import predictive_maintenance_service
 from app.database.models.user import User
 from app.api.deps import require_role
+from app.schemas.asset import AssetResponse
 
 router = APIRouter(prefix="/assets", tags=["assets"])
 

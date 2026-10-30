@@ -12,6 +12,7 @@ from app.schemas.staff import (
     EligibleStaffResponse
 )
 from app.services.assignment_service import assignment_service
+from app.core.exceptions import EntityNotFoundError
 from app.api.deps import require_role
 
 router = APIRouter(prefix="/staff", tags=["staff"])
@@ -65,7 +66,7 @@ def update_staff_availability(
     prof = db.query(StaffProfile).filter(StaffProfile.user_id == user_id).first()
     if not prof:
         raise EntityNotFoundError("StaffProfile", user_id)
-    prof.availability_status = payload.status
+    prof.availability_status = status
     db.commit()
     return {"user_id": user_id, "status": prof.availability_status}
 
