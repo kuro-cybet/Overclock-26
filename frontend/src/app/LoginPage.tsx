@@ -11,32 +11,46 @@ import {
   Wrench,
 } from 'lucide-react';
 
+// Demo credentials for the seeded accounts, one per portal. Clicking a portal
+// card signs straight in with that account instead of typing the credentials.
+const DEMO_PASSWORD = 'password123';
+
 const PORTALS = [
   {
+    role: 'admin',
+    email: 'admin@campusops.edu',
     icon: <Building2 size={18} />,
     title: 'Operations Admin',
     description: 'Control centre, incidents, approvals and simulations.',
     color: '#345873',
   },
   {
+    role: 'technician',
+    email: 'tech@campusops.edu',
     icon: <Wrench size={18} />,
     title: 'Technician',
     description: 'Assigned tasks, checklists and parts requisitions.',
     color: '#F29877',
   },
   {
+    role: 'faculty',
+    email: 'faculty@campusops.edu',
     icon: <GraduationCap size={18} />,
     title: 'Faculty',
     description: 'Timetables, room requests and exam readiness.',
     color: '#8EB9D8',
   },
   {
+    role: 'student',
+    email: 'student@campusops.edu',
     icon: <UserCheck size={18} />,
     title: 'Student',
     description: 'Issue intake, notices and campus services.',
     color: '#5B8C6E',
   },
 ];
+
+type Portal = (typeof PORTALS)[number];
 
 export const LoginPage: React.FC = () => {
   const { login, user } = useAuth();
@@ -45,7 +59,10 @@ export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [portalLoading, setPortalLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const busy = loading || portalLoading !== null;
 
   // Already signed in: go straight to the portal tied to this account's role.
   useEffect(() => {
@@ -63,6 +80,23 @@ export const LoginPage: React.FC = () => {
       setError(err?.message || 'Unable to sign in. Check your credentials and try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePortalLogin = async (portal: Portal) => {
+    if (busy) return;
+    setPortalLoading(portal.role);
+    setError(null);
+    try {
+      const signedIn = await login(portal.email, DEMO_PASSWORD);
+      navigate(`/${signedIn.role}`, { replace: true });
+    } catch (err: any) {
+      setError(
+        err?.message ||
+          `Could not sign in to the ${portal.title} portal. Use the form below instead.`
+      );
+    } finally {
+      setPortalLoading(null);
     }
   };
 
@@ -90,29 +124,50 @@ export const LoginPage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-12">
-          {/* Portal guide (informational only) */}
+          {/* Portal quick sign-in */}
           <div className="md:col-span-6 p-8 bg-[#FFF4E9]/40 border-b md:border-b-0 md:border-r border-slate-100">
-            <p className="text-xs font-black uppercase tracking-wider text-[#345873] mb-4">
+            <p className="text-xs font-black uppercase tracking-wider text-[#345873] mb-1">
               Four dedicated workspaces
             </p>
+            <p className="text-[11px] text-gray-500 mb-4">
+              Click a workspace to sign in to it directly.
+            </p>
             <div className="space-y-3">
-              {PORTALS.map((portal) => (
-                <div
-                  key={portal.title}
-                  className="flex items-start space-x-3 bg-white/80 border border-slate-200 rounded-2xl p-3.5"
-                >
-                  <span
-                    className="p-2 rounded-xl shrink-0"
-                    style={{ backgroundColor: `${portal.color}18`, color: portal.color }}
+              {PORTALS.map((portal) => {
+                const isPortalLoading = portalLoading === portal.role;
+                return (
+                  <button
+                    type="button"
+                    key={portal.role}
+                    onClick={() => handlePortalLogin(portal)}
+                    disabled={busy}
+                    aria-label={`Sign in to the ${portal.title} portal`}
+                    title={`Sign in as ${portal.email}`}
+                    className="group w-full text-left flex items-start space-x-3 bg-white/80 border border-slate-200 rounded-2xl p-3.5 transition cursor-pointer hover:border-[#345873]/50 hover:bg-white hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#345873] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:bg-white/80 disabled:hover:shadow-none"
                   >
-                    {portal.icon}
-                  </span>
-                  <div>
-                    <p className="text-xs font-extrabold text-gray-900">{portal.title}</p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">{portal.description}</p>
-                  </div>
-                </div>
-              ))}
+                    <span
+                      className="p-2 rounded-xl shrink-0"
+                      style={{ backgroundColor: `${portal.color}18`, color: portal.color }}
+                    >
+                      {portal.icon}
+                    </span>
+                    <div className="flex-1">
+                      <p className="text-xs font-extrabold text-gray-900">{portal.title}</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">{portal.description}</p>
+                    </div>
+                    <span className="self-center shrink-0 text-[10px] font-bold text-[#345873]">
+                      {isPortalLoading ? (
+                        'Signing in…'
+                      ) : (
+                        <ArrowRight
+                          size={14}
+                          className="opacity-0 group-hover:opacity-100 transition"
+                        />
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
             <p className="mt-5 text-[11px] leading-relaxed text-gray-500">
               Your account is bound to a single role and portal. System administrators can preview
@@ -171,7 +226,7 @@ export const LoginPage: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={busy}
                 className="w-full py-3 bg-[#345873] text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50 mt-1 flex items-center justify-center space-x-2 hover:bg-[#253f54]"
               >
                 <span>{loading ? 'Signing in…' : 'Sign in'}</span>
