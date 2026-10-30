@@ -56,6 +56,65 @@ CREATE TABLE recovery_actions_new (
 """
 
 
+# Columns added to `users` for Google sign-in after the tracked SQLite file was
+# created.  Kept in sync with app/database/models/user.py.
+_USER_COLUMNS = {
+    "auth_provider": "VARCHAR(20) DEFAULT 'password'",
+    "provider_subject": "VARCHAR(255)",
+    "email_verified": "BOOLEAN DEFAULT 0",
+    "last_login_at": "DATETIME",
+}
+
+# Mirrors app/database/models/role_assignment.py.  The app never calls
+# create_all at startup, so a newly added table has to be created here.
+_ROLE_ASSIGNMENTS_DDL = """
+CREATE TABLE IF NOT EXISTS role_assignments (
+    id VARCHAR(36) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    role VARCHAR(50) NOT NULL,
+    sub_role VARCHAR(50),
+    department VARCHAR(100),
+    building_id VARCHAR(36),
+    floor_id VARCHAR(36),
+    is_active BOOLEAN NOT NULL DEFAULT 1,
+    invited_by VARCHAR(36),
+    created_at DATETIME NOT NULL,
+    consumed_at DATETIME,
+    PRIMARY KEY (id)
+)
+"""
+
+
+def _table_exists(conn, table: str) -> bool:
+    row = conn.exec_driver_sql(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone()
+    return row is not None
+
+
+def _repair_users_and_rbac(conn) -> None:
+    """Add the OAuth columns and the role allowlist table if missing."""
+    if _table_exists(conn, "users"):
+        existing = set(_columns(conn, "users"))
+        for column, ddl in _USER_COLUMNS.items():
+            if column not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE users ADD COLUMN {column} {ddl}")
+                logger.info("[schema] added users.%s", column)
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_users_provider_subject "
+            "ON users (provider_subject)"
+        )
+
+    if not _table_exists(conn, "role_assignments"):
+        conn.exec_driver_sql(_ROLE_ASSIGNMENTS_DDL)
+        logger.info("[schema] created role_assignments table")
+
+    conn.exec_driver_sql(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_role_assignments_email "
+        "ON role_assignments (email)"
+    )
+
+
 def _columns(conn, table: str):
     rows = conn.exec_driver_sql(f"PRAGMA table_info({table})").fetchall()
     # PRAGMA table_info: cid, name, type, notnull, dflt_value, pk
@@ -169,6 +228,7 @@ def run_startup_migrations(engine: Engine) -> None:
 
     try:
         with engine.begin() as conn:
+            _repair_users_and_rbac(conn)
             _repair_recovery_schema(conn)
     except Exception:  # pragma: no cover - never block startup on a repair
         logger.exception("[schema] SQLite schema repair failed; continuing startup.")

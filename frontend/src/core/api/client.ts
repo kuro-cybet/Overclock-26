@@ -130,6 +130,8 @@ export const api = {
   // Auth
   login: (credentials: { email: string; password: string }) =>
     apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
+  googleLogin: (credential: string) =>
+    apiRequest('/auth/google', { method: 'POST', body: JSON.stringify({ credential }) }),
   getMe: () => apiRequest('/auth/me'),
   impersonate: (role: string) =>
     apiRequest('/auth/impersonate', { method: 'POST', body: JSON.stringify({ role }) }),

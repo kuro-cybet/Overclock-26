@@ -10,10 +10,14 @@ Interactive OpenAPI UI: `http://localhost:8000/docs`
 ### `POST /auth/login`
 Authenticates a user against persistent database records and issues a 24-hour signed JWT bearer token.
 
+> Password sign-in is **disabled by default** because CampusOps uses Google
+> sign-in. It only works when the server is started with
+> `PASSWORD_LOGIN_ENABLED=true`, and returns `403` otherwise.
+
 **Request Body:**
 ```json
 {
-  "email": "admin@campusops.edu",
+  "email": "rajesekersudharsan@gmail.com",
   "password": "password123"
 }
 ```
@@ -25,13 +29,28 @@ Authenticates a user against persistent database records and issues a 24-hour si
   "token_type": "bearer",
   "user": {
     "id": "u-admin-1",
-    "email": "admin@campusops.edu",
-    "name": "Dr. Sarah Mitchell",
+    "email": "rajesekersudharsan@gmail.com",
+    "name": "Rajesekar Sudharsan",
     "role": "admin",
     "sub_role": "system_admin"
   }
 }
 ```
+
+### `POST /auth/google`
+Signs in with a Google Identity Services ID token. The server verifies the token
+against `GOOGLE_CLIENT_ID`, requires a verified email, and reads the role
+**only** from the `role_assignments` allowlist. The client never sends a role.
+
+```json
+{
+  "credential": "<google-id-token>"
+}
+```
+
+* `401` — invalid/expired token, or unverified email
+* `403` — Google account has no active CampusOps role assignment
+* `503` — Google sign-in is not configured on the server
 
 ### `GET /auth/me`
 Retrieves current identity, permissions, and assigned building/floor scope. Requires `Authorization: Bearer <token>`.
