@@ -21,7 +21,7 @@ session mode is safer for the migration script.
 From `backend/`, with `psycopg2-binary` installed (`pip install -r requirements.txt`):
 
 ```powershell
-# First run: rebuild the schema cleanly, copy all 32 tables, lock down anon access.
+# First run: rebuild the schema cleanly, copy all 33 tables, lock down anon access.
 python scripts/migrate_to_supabase.py --password "<DB_PASSWORD>" --recreate
 
 # Re-runs without dropping anything (ON CONFLICT DO NOTHING):
@@ -68,14 +68,16 @@ Until Google sign-in is configured, these accounts sign in with the password
 
 ## 4. Point the backend at Supabase
 
-Set these on the Render backend service:
+Set these on the Render backend service (`campusops-u6yt`), leaving the
+existing Supabase/Gmail values untouched:
 
 ```
 DATABASE_URL=postgresql://postgres.pcmjjphqnjrebauyerdy:<PASSWORD>@aws-0-ap-south-1.pooler.supabase.com:5432/postgres
 GOOGLE_CLIENT_ID=<google-oauth-client-id>.apps.googleusercontent.com
 ```
 
-Set this on the Render frontend service (or wherever the Vite build runs):
+Set this on the Render frontend service (`overclock-26`) and redeploy so the
+Vite build picks it up:
 
 ```
 VITE_GOOGLE_CLIENT_ID=<same client id>
@@ -104,11 +106,22 @@ the client.
 
 ```powershell
 # Backend health + a real login
+curl https://campusops-u6yt.onrender.com/health
 curl https://campusops-u6yt.onrender.com/api/v1/auth/login -H "Content-Type: application/json" -d '{\"email\":\"rajesekersudharsan@gmail.com\",\"password\":\"password123\"}'
+
+# The retired seeded account must be rejected
+curl -i https://campusops-u6yt.onrender.com/api/v1/auth/login -H "Content-Type: application/json" -d '{\"email\":\"student@campusops.edu\",\"password\":\"password123\"}'
 
 # The anon key must no longer read tables (expect an error / empty result)
 curl "https://pcmjjphqnjrebauyerdy.supabase.co/rest/v1/users?select=email&limit=1" -H "apikey: <ANON_KEY>"
 ```
 
-In the UI, sign in with each of the four accounts and confirm the reports,
-incidents, work orders and bookings from the local database are present.
+Open `https://overclock-26.onrender.com`, sign in with each of the four
+accounts, and confirm:
+
+* the reports, incidents, work orders and bookings from the local database are
+  present (for example report `RPT-202610-0115`),
+* **Continue with Google** appears, and each assigned Google account lands in
+  its own portal,
+* an unassigned Google account is refused.
+
