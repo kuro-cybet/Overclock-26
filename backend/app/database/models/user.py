@@ -16,5 +16,7 @@ class User(Base):
     building_id = Column(String(36), nullable=True)
     floor_id = Column(String(36), nullable=True)
     avatar_url = Column(String(255), nullable=True)
+    phone_number = Column(String(30), unique=True, nullable=True, index=True)
+    whatsapp_verified = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

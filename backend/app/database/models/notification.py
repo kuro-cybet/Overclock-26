@@ -21,11 +21,12 @@ class NotificationOutbox(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     recipient_email = Column(String(255), nullable=False)
-    channel = Column(String(50), default="email", nullable=False)  # email, in_app, webhook
+    recipient_phone = Column(String(50), nullable=True, index=True)
+    channel = Column(String(50), default="email", nullable=False)  # email, in_app, webhook, whatsapp
     subject = Column(String(255), nullable=False)
     body = Column(Text, nullable=False)
     status = Column(String(50), default="queued", nullable=False)  # queued, processing, sent, failed
     attempts = Column(Integer, default=0, nullable=False)
     last_attempt_at = Column(DateTime, nullable=True)
+    idempotency_key = Column(String(128), unique=True, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-

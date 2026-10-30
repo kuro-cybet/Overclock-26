@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
@@ -107,6 +108,118 @@ class NotificationService:
         db.flush()
         return outbox
 
+    def queue_whatsapp_notification(
+        self,
+        db: Session,
+        recipient_phone: str,
+        body: str,
+        idempotency_key: Optional[str] = None,
+        recipient_email: Optional[str] = None,
+        subject: str = "Ticket Status Update"
+    ) -> Optional[NotificationOutbox]:
+        """
+        Enqueues an outbound WhatsApp notification into the transactional outbox.
+        Guarantees idempotency via idempotency_key to prevent duplicate WhatsApp messages.
+        """
+        clean_phone = recipient_phone.replace("+", "").strip()
+
+        if idempotency_key:
+            existing = (
+                db.query(NotificationOutbox)
+                .filter(NotificationOutbox.idempotency_key == idempotency_key)
+                .first()
+            )
+            if existing:
+                logger.info(f"[Outbox] Duplicate WhatsApp event ignored: {idempotency_key}")
+                return existing
+
+        outbox = NotificationOutbox(
+            recipient_email=recipient_email or f"{clean_phone}@whatsapp",
+            recipient_phone=clean_phone,
+            channel="whatsapp",
+            subject=subject,
+            body=body,
+            status="queued",
+            attempts=0,
+            last_attempt_at=None,
+            idempotency_key=idempotency_key
+        )
+        db.add(outbox)
+        db.flush()
+        logger.info(f"[Outbox] Queued WhatsApp notification for {clean_phone}: {idempotency_key}")
+        return outbox
+
+    def notify_ticket_state_change(
+        self,
+        db: Session,
+        incident_id: str,
+        new_status: str,
+        extra_details: Optional[str] = None
+    ):
+        """
+        Finds the student/faculty member who submitted the ticket and dispatches
+        a real-time WhatsApp status notification via the transactional outbox.
+        """
+        from app.database.models.incident import Incident
+        from app.database.models.report import Report
+        from app.database.models.whatsapp import WhatsAppUserLink
+
+        incident = db.query(Incident).filter(Incident.id == incident_id).first()
+        if not incident:
+            return
+
+        # Find all linked reports to identify original reporters
+        reports = db.query(Report).filter(Report.incident_id == incident.id).all()
+        for report in reports:
+            # Check if reporter has verified WhatsApp
+            link = (
+                db.query(WhatsAppUserLink)
+                .filter(WhatsAppUserLink.user_id == report.reporter_id, WhatsAppUserLink.is_verified == True)
+                .first()
+            )
+            user = db.query(User).filter(User.id == report.reporter_id).first()
+            phone = link.phone_number if link else (user.phone_number if (user and user.whatsapp_verified) else None)
+
+            if not phone:
+                continue
+
+            # Format status message per specifications
+            status_title = new_status.replace("_", " ").title()
+            if new_status in ["resolved", "closed"]:
+                body = (
+                    f"🎉 *Your ticket {incident.incident_code} has been {new_status}.*\n\n"
+                    f"The reported {incident.category} issue has been marked as completed.\n\n"
+                    f"Thank you for using CampusOps."
+                )
+            elif new_status == "in_progress":
+                body = (
+                    f"🔔 *Update for Ticket {incident.incident_code}:*\n\n"
+                    f"*Status:* Work in Progress\n\n"
+                    f"{extra_details or f'A technician has started inspecting and servicing the issue.'}"
+                )
+            elif new_status in ["pending_parts", "blocked"]:
+                body = (
+                    f"🔔 *Update for Ticket {incident.incident_code}:*\n\n"
+                    f"*Status:* Waiting for Resources\n\n"
+                    f"{extra_details or 'Required replacement parts have been requisitioned for this work order.'}"
+                )
+            else:
+                body = (
+                    f"🔔 *Update for Ticket {incident.incident_code}:*\n\n"
+                    f"*Status:* {status_title}\n\n"
+                    f"{extra_details or f'Your ticket status has been updated to {status_title}.'}"
+                )
+
+            idempotency_key = f"wa_ticket_{incident.incident_code}_{new_status}_{report.reporter_id}"
+            self.queue_whatsapp_notification(
+                db=db,
+                recipient_phone=phone,
+                body=body,
+                idempotency_key=idempotency_key,
+                recipient_email=user.email if user else None,
+                subject=f"Ticket {incident.incident_code} Update"
+            )
+
     def process_pending_outbox(self, db: Session, max_items: int = 25) -> Dict[str, Any]:
         """
         Processes pending notifications in the outbox with retry logic and exponential backoff.
@@ -123,6 +236,8 @@ class NotificationService:
         call, so the background worker and a manual trigger cannot both deliver
         the same email. Rows abandoned by a crash are requeued after 5 minutes.
         """
+        from app.services.whatsapp_service import whatsapp_service
+
         now = datetime.utcnow()
 
         # Recover rows left in "processing" by a crashed worker.
@@ -187,14 +302,41 @@ class NotificationService:
             db.refresh(item)
 
             try:
-                gmail_sender.send(
-                    recipient=item.recipient_email,
-                    subject=item.subject,
-                    body=item.body,
-                    entity_code=item.id,
-                )
-                item.status = "sent"
-                sent_count += 1
+                if item.channel == "whatsapp" and item.recipient_phone:
+                    # Execute WhatsApp Cloud API send synchronously in worker
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            send_future = asyncio.run_coroutine_threadsafe(
+                                whatsapp_service.send_text_message(item.recipient_phone, item.body),
+                                loop
+                            )
+                            send_res = send_future.result(timeout=10)
+                        else:
+                            send_res = loop.run_until_complete(
+                                whatsapp_service.send_text_message(item.recipient_phone, item.body)
+                            )
+                    except Exception:
+                        send_res = asyncio.run(
+                            whatsapp_service.send_text_message(item.recipient_phone, item.body)
+                        )
+
+                    if send_res.get("status") in ["sent", "simulated"]:
+                        item.status = "sent"
+                        sent_count += 1
+                    else:
+                        if item.attempts >= 3:
+                            item.status = "failed"
+                        failed_count += 1
+                else:
+                    gmail_sender.send(
+                        recipient=item.recipient_email,
+                        subject=item.subject,
+                        body=item.body,
+                        entity_code=item.id,
+                    )
+                    item.status = "sent"
+                    sent_count += 1
             except EmailDeliveryError as e:
                 logger.error(f"[Outbox] Delivery failed for {item.recipient_email}: {e}")
                 item.status = "failed" if item.attempts >= 3 else "queued"
