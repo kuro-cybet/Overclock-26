@@ -14,6 +14,8 @@ import { ApprovalsView } from '../portals/admin/ApprovalsView';
 import { StaffView } from '../portals/admin/StaffView';
 import { ScenarioSimulatorView } from '../portals/admin/ScenarioSimulatorView';
 import { AnalyticsView } from '../portals/admin/AnalyticsView';
+import { OperationalIntelligenceView } from '../portals/admin/OperationalIntelligenceView';
+import { PredictiveMaintenanceView } from '../portals/admin/PredictiveMaintenanceView';
 
 // Technician Pages
 import { TechnicianDashboard } from '../portals/technician/TechnicianDashboard';
@@ -55,6 +57,22 @@ export const router = createBrowserRouter([
         ),
         children: [
           { index: true, element: <AdminDashboard /> },
+          {
+            path: 'intelligence',
+            element: (
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['system_admin', 'department_manager', 'facilities_admin']}>
+                <OperationalIntelligenceView />
+              </RoleGuard>
+            )
+          },
+          {
+            path: 'predictive',
+            element: (
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['system_admin', 'facilities_admin']}>
+                <PredictiveMaintenanceView />
+              </RoleGuard>
+            )
+          },
           {
             path: 'incidents',
             element: (

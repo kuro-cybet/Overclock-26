@@ -67,6 +67,11 @@ export const api = {
   // Work Orders & Staff
   getWorkOrders: (params?: string) => apiRequest(`/work-orders${params ? `?${params}` : ''}`),
   getWorkOrderDetails: (id: string) => apiRequest(`/work-orders/${id}/details`),
+  getWorkOrderChecklist: (woId: string) => apiRequest(`/work-orders/${woId}/checklist`),
+  updateChecklistItem: (woId: string, itemId: string, data: { is_completed: boolean; verification_notes?: string }) =>
+    apiRequest(`/work-orders/${woId}/checklist/${itemId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  requisitionParts: (woId: string, data: { item_id: string; quantity: number; justification?: string }) =>
+    apiRequest(`/work-orders/${woId}/parts-requisition`, { method: 'POST', body: JSON.stringify(data) }),
   updateWorkOrder: (id: string, data: any) =>
     apiRequest(`/work-orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   reassignWorkOrder: (id: string, data: { new_technician_id: string; reassignment_reason: string }) =>
@@ -87,6 +92,9 @@ export const api = {
     apiRequest(`/rooms/${roomId}/readiness`, { method: 'PATCH', body: JSON.stringify({ daily_readiness_status: readiness }) }),
 
   getBookings: (params?: string) => apiRequest(`/bookings${params ? `?${params}` : ''}`),
+  getExaminations: () => apiRequest('/bookings/examinations'),
+  submitExamReadiness: (bookingId: string, data: { status: string; checklist: any; notes?: string; reported_faults?: string[] }) =>
+    apiRequest(`/bookings/${bookingId}/exam-readiness`, { method: 'POST', body: JSON.stringify(data) }),
   createBooking: (data: any) =>
     apiRequest('/bookings', { method: 'POST', body: JSON.stringify(data) }),
 
@@ -110,28 +118,46 @@ export const api = {
     apiRequest('/recovery/plan', { method: 'POST', body: JSON.stringify(data) }),
   executeRecovery: (data: any) =>
     apiRequest('/recovery/execute', { method: 'POST', body: JSON.stringify(data) }),
+  initiateAutonomousRecovery: (data: any) =>
+    apiRequest('/recovery/initiate', { method: 'POST', body: JSON.stringify(data) }),
+  runRecoveryActions: (executionId: string) =>
+    apiRequest(`/recovery/${executionId}/run-actions`, { method: 'POST' }),
+  verifyRecoveryOutcome: (executionId: string) =>
+    apiRequest(`/recovery/${executionId}/verify`, { method: 'POST' }),
+  getRecoveryExecutions: () =>
+    apiRequest('/recovery/executions'),
 
   triggerSimulation: (scenario: string) =>
     apiRequest(`/simulations/${scenario}`, { method: 'POST' }),
   resetSimulation: () =>
     apiRequest('/simulations/reset', { method: 'POST' }),
 
-  // Notifications
+  // Notifications & Outbox
   getNotifications: () => apiRequest('/notifications'),
   markNotificationRead: (id: string) =>
     apiRequest(`/notifications/${id}/read`, { method: 'PATCH' }),
   markAllNotificationsRead: () =>
     apiRequest('/notifications/read-all', { method: 'POST' }),
+  processOutboxQueue: () =>
+    apiRequest('/notifications/outbox/process', { method: 'POST' }),
 
   // Integrations
   sendSimulatedEmail: (data: { sender_email: string; subject: string; body: string }) =>
     apiRequest('/integrations/email/inbox', { method: 'POST', body: JSON.stringify(data) }),
   getOutbox: () => apiRequest('/integrations/email/outbox'),
 
-  // Intelligence & Upgrades
+  // Intelligence & Predictive Engine
   getHistoricalCases: (category: string, symptoms: string) =>
     apiRequest(`/intelligence/historical-cases?category=${category}&symptoms=${encodeURIComponent(symptoms)}`),
   getPredictiveAlerts: () => apiRequest('/intelligence/predictive-alerts'),
+  getOperationalAssessment: () => apiRequest('/intelligence/operational-assessment'),
+  getBuildingClusters: () => apiRequest('/intelligence/building-clusters'),
+  getRoomsAtRisk: () => apiRequest('/intelligence/rooms-at-risk'),
+  getAffectedExaminations: () => apiRequest('/intelligence/affected-examinations'),
+  getDecisionExplanations: (type?: string) =>
+    apiRequest(`/intelligence/explanations${type ? `?decision_type=${type}` : ''}`),
+  getPredictiveFleetOverview: () => apiRequest('/assets/predictive-overview'),
+  getAssetPredictiveHealth: (assetId: string) => apiRequest(`/assets/${assetId}/predictive-health`),
+
   apiRequest
 };
-
