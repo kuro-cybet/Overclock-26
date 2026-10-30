@@ -29,6 +29,9 @@ def list_users(
     current_user: User = Depends(require_role(["admin"])),
     db: Session = Depends(get_db)
 ):
+    """
+    List user accounts with role, department, and assigned physical location metadata.
+    """
     q = db.query(User)
     if role:
         q = q.filter(User.role == role)

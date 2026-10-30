@@ -21,6 +21,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    swagger_ui_parameters={"persistAuthorization": True},
     lifespan=lifespan
 )
 
@@ -42,7 +43,23 @@ async def campusops_exception_handler(request: Request, exc: CampusOpsException)
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-@app.get("/")
+from pydantic import BaseModel
+
+class PlatformStatusResponse(BaseModel):
+    platform: str
+    status: str
+    version: str
+    api_v1_docs: str
+
+class HealthCheckResponse(BaseModel):
+    status: str
+
+@app.get(
+    "/",
+    response_model=PlatformStatusResponse,
+    summary="Root Platform Information",
+    description="Returns platform name, operational state, version, and Swagger documentation entrypoint."
+)
 def root():
     return {
         "platform": settings.PROJECT_NAME,
@@ -51,7 +68,12 @@ def root():
         "api_v1_docs": "/docs"
     }
 
-@app.get("/health")
+@app.get(
+    "/health",
+    response_model=HealthCheckResponse,
+    summary="Liveness & Health Probe",
+    description="Endpoint for load balancers and container orchestrators to probe application liveness."
+)
 def health_check():
     return {"status": "healthy"}
 

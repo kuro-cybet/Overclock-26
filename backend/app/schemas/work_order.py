@@ -1,6 +1,7 @@
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+from app.schemas.auth import UserSummary
 
 class WorkOrderCreate(BaseModel):
     incident_id: str
@@ -30,6 +31,8 @@ class WorkOrderRequestReassignment(BaseModel):
     notes: Optional[str] = None
 
 class ChecklistItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     work_order_id: str
     task_description: str
@@ -39,9 +42,6 @@ class ChecklistItemResponse(BaseModel):
     completed_by_id: Optional[str] = None
     verification_notes: Optional[str] = None
     verification_status: str
-
-    class Config:
-        from_attributes = True
 
 class ChecklistItemUpdate(BaseModel):
     is_completed: bool
@@ -53,6 +53,8 @@ class PartsRequisitionRequest(BaseModel):
     justification: Optional[str] = None
 
 class WorkOrderResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     work_order_code: str
     incident_id: str
@@ -71,5 +73,28 @@ class WorkOrderResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+class WorkOrderDetailsResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    work_order: WorkOrderResponse
+    incident: Optional[Any] = None
+    technician: Optional[UserSummary] = None
+    reservations: List[Any] = []
+    checklists: List[ChecklistItemResponse] = []
+
+class PartsRequisitionResponse(BaseModel):
+    status: str
+    type: str  # reservation or procurement
+    item_name: str
+    quantity: int
+    work_order_id: str
+    message: str
+    reservation_id: Optional[str] = None
+    procurement_id: Optional[str] = None
+    approval_id: Optional[str] = None
+
+class WorkOrderRequestReassignmentResponse(BaseModel):
+    status: str
+    work_order_id: str
+    approval_id: str
+    message: str

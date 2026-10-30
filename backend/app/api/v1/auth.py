@@ -44,6 +44,13 @@ def _user_summary(user: User) -> UserSummary:
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    """
+    Authenticate user credentials.
+
+    - **email**: Valid registered campus email address.
+    - **password**: Plaintext password checked against argon2/bcrypt password hash.
+    - Returns signed JWT token with sub-role claims and active session profile.
+    """
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(

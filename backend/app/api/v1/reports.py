@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.report import Report
@@ -7,15 +7,33 @@ from app.database.models.user import User
 from app.schemas.report import ReportCreate, ReportResponse
 from app.services.intake_service import intake_service
 from app.api.deps import get_current_user
+from app.core.exceptions import EntityNotFoundError
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
-@router.post("", response_model=ReportResponse)
+@router.post(
+    "",
+    response_model=ReportResponse,
+    summary="Submit Facility or Equipment Report",
+    description="Submits a new maintenance, facility, or IT issue report. AI extraction classifies urgency and category.",
+    responses={
+        401: {"description": "Authentication required"}
+    }
+)
 def submit_report(
     payload: ReportCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Submit a facility fault or maintenance request.
+
+    - **title**: Brief summary of the problem.
+    - **description**: Comprehensive description of symptoms or damage.
+    - **building_id**: Campus building UUID.
+    - **room_id**: Optional specific classroom, lab, or office UUID.
+    - **asset_id**: Optional specific asset UUID.
+    """
     result = intake_service.process_incoming_report(
         db=db,
         reporter_id=current_user.id,
@@ -32,13 +50,24 @@ def submit_report(
     db.commit()
     return result["report"]
 
-@router.get("", response_model=List[ReportResponse])
+@router.get(
+    "",
+    response_model=List[ReportResponse],
+    summary="List Maintenance Reports",
+    description="Retrieves submitted maintenance reports. Scoped automatically by caller role (students and faculty see only their own reports).",
+    responses={
+        401: {"description": "Authentication required"}
+    }
+)
 def list_reports(
-    status: Optional[str] = Query(None),
-    limit: int = 100,
+    status: Optional[str] = Query(None, description="Filter by status: `submitted`, `triaged`, `converted`, `rejected`"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum reports to return"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    List reports visible to the active user.
+    """
     q = db.query(Report)
 
     # Scoping: Students & Faculty see only their submitted reports
@@ -51,15 +80,26 @@ def list_reports(
     reports = q.order_by(Report.created_at.desc()).limit(limit).all()
     return reports
 
-@router.get("/{report_id}", response_model=ReportResponse)
+@router.get(
+    "/{report_id}",
+    response_model=ReportResponse,
+    summary="Get Report by ID",
+    description="Retrieves a specific report by its UUID.",
+    responses={
+        401: {"description": "Authentication required"},
+        404: {"description": "Report not found"}
+    }
+)
 def get_report(
     report_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Retrieve single report details.
+    """
     report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
-        from app.core.exceptions import EntityNotFoundError
         raise EntityNotFoundError("Report", report_id)
 
     # Students and faculty may only open their own reports.
@@ -71,4 +111,3 @@ def get_report(
         )
 
     return report
-

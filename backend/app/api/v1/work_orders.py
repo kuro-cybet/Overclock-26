@@ -1,30 +1,32 @@
 import json
-from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, HTTPException, status as http_status
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, Query, status as http_status
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.work_order import WorkOrder
+from app.database.models.work_order_checklist import WorkOrderChecklistItem
 from app.database.models.incident import Incident
 from app.database.models.report import Report
 from app.database.models.inventory import StockReservation, InventoryItem
 from app.database.models.approval import ApprovalRequest, ProcurementRequest
 from app.database.models.notification import Notification
 from app.database.models.user import User
-from app.database.models.work_order_checklist import WorkOrderChecklistItem
-from app.database.models.inventory_transaction import InventoryTransaction
 from app.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
+    WorkOrderResponse,
     WorkOrderReassignRequest,
     WorkOrderRequestReassignment,
-    WorkOrderResponse,
+    WorkOrderRequestReassignmentResponse,
+    WorkOrderDetailsResponse,
     ChecklistItemResponse,
     ChecklistItemUpdate,
-    PartsRequisitionRequest
+    PartsRequisitionRequest,
+    PartsRequisitionResponse
 )
-from app.services.assignment_service import assignment_service
 from app.services.inventory_service import inventory_service
+from app.services.assignment_service import assignment_service
 from app.services.event_service import event_service
 from app.services import work_order_service, workflow_notifications
 from app.core.state_machine import validate_transition
@@ -58,6 +60,9 @@ def list_work_orders(
     current_user: User = Depends(_wo_reader),
     db: Session = Depends(get_db)
 ):
+    """
+    List work orders with role-based scoping and filtering.
+    """
     q = db.query(WorkOrder)
 
     # Scoping: Technicians view only their assigned work orders by default
@@ -101,7 +106,15 @@ def get_work_order_details(
         "checklists": checklists
     }
 
-@router.get("/{work_order_id}/checklist", response_model=List[ChecklistItemResponse])
+@router.get(
+    "/{work_order_id}/checklist",
+    response_model=List[ChecklistItemResponse],
+    summary="Get Work Order Checklist Items",
+    description="Returns the sequential persistent checklist steps for a work order. Seeds standard diagnostic and safety steps if none currently exist.",
+    responses={
+        404: {"description": "Work order not found"}
+    }
+)
 def get_work_order_checklist(
     work_order_id: str,
     current_user: User = Depends(_wo_reader),
@@ -139,7 +152,17 @@ def get_work_order_checklist(
 
     return items
 
-@router.patch("/{work_order_id}/checklist/{item_id}", response_model=ChecklistItemResponse)
+@router.patch(
+    "/{work_order_id}/checklist/{item_id}",
+    response_model=ChecklistItemResponse,
+    summary="Update Checklist Task Completion Status",
+    description="Marks a checklist task as completed or incomplete. Enforces technician ownership and records immutable audit log events.",
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Forbidden: Task not assigned to calling technician"},
+        404: {"description": "Work order or checklist item not found"}
+    }
+)
 def update_checklist_item(
     work_order_id: str,
     item_id: str,
@@ -147,6 +170,9 @@ def update_checklist_item(
     current_user: User = Depends(_wo_reader),
     db: Session = Depends(get_db)
 ):
+    """
+    Update completion status of a single checklist task.
+    """
     item = (
         db.query(WorkOrderChecklistItem)
         .filter(WorkOrderChecklistItem.id == item_id, WorkOrderChecklistItem.work_order_id == work_order_id)
@@ -201,13 +227,26 @@ def update_checklist_item(
     db.refresh(item)
     return item
 
-@router.post("/{work_order_id}/parts-requisition")
+@router.post(
+    "/{work_order_id}/parts-requisition",
+    response_model=PartsRequisitionResponse,
+    summary="Requisition Spare Parts for Work Order",
+    description="Requests required spare parts for a work order. Reserves stock if available on-site, or stages an emergency procurement request if out of stock.",
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Forbidden: Not assigned to this work order"},
+        404: {"description": "Work order or inventory item not found"}
+    }
+)
 def requisition_parts(
     work_order_id: str,
     payload: PartsRequisitionRequest,
     current_user: User = Depends(_wo_reader),
     db: Session = Depends(get_db)
 ):
+    """
+    Requisition parts with automated stock reservation or emergency procurement escalation.
+    """
     wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
     if not wo:
         raise EntityNotFoundError("WorkOrder", work_order_id)
@@ -309,7 +348,15 @@ def requisition_parts(
             "message": f"Insufficient stock ({available} available). Emergency procurement staged and {wo.work_order_code} flagged as blocked."
         }
 
-@router.post("", response_model=WorkOrderResponse)
+@router.post(
+    "",
+    response_model=WorkOrderResponse,
+    summary="Create Work Order",
+    description="Creates a work order linked to an active incident and seeds required checklists.",
+    responses={
+        401: {"description": "Authentication required"}
+    }
+)
 def create_work_order(
     payload: WorkOrderCreate,
     current_user: User = Depends(_wo_admin),
@@ -339,7 +386,17 @@ def create_work_order(
     db.refresh(wo)
     return wo
 
-@router.patch("/{work_order_id}", response_model=WorkOrderResponse)
+@router.patch(
+    "/{work_order_id}",
+    response_model=WorkOrderResponse,
+    summary="Update Work Order State & Evidence",
+    description="Updates work order status, diagnosis, notes, or checklist. Strictly enforces mandatory checklist completion before allowing transition to 'completed'.",
+    responses={
+        401: {"description": "Authentication required"},
+        404: {"description": "Work order not found"},
+        422: {"description": "Incomplete checklist tasks or invalid state transition"}
+    }
+)
 def update_work_order(
     work_order_id: str,
     payload: WorkOrderUpdate,
@@ -422,13 +479,26 @@ def update_work_order(
     db.refresh(wo)
     return wo
 
-@router.post("/{work_order_id}/reassign", response_model=WorkOrderResponse)
+@router.post(
+    "/{work_order_id}/reassign",
+    response_model=WorkOrderResponse,
+    summary="Directly Reassign Work Order",
+    description="Administrative endpoint to reassign a work order to a different technician. Technicians cannot invoke this directly (must use request-reassignment).",
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Technicians forbidden from direct reassignment"},
+        404: {"description": "Work order not found"}
+    }
+)
 def reassign_work_order(
     work_order_id: str,
     payload: WorkOrderReassignRequest,
     current_user: User = Depends(_wo_admin),
     db: Session = Depends(get_db)
 ):
+    """
+    Directly reassign work order to another technician (supervisor/admin only).
+    """
     # Technicians cannot directly reassign work orders; only request
     if current_user.role == "technician":
         raise HTTPException(
@@ -446,7 +516,17 @@ def reassign_work_order(
     db.refresh(wo)
     return wo
 
-@router.post("/{work_order_id}/request-reassignment")
+@router.post(
+    "/{work_order_id}/request-reassignment",
+    response_model=WorkOrderRequestReassignmentResponse,
+    summary="Submit Work Order Reassignment Request",
+    description="Allows an assigned field technician to request reassignment (e.g., due to illness, shift end, or specialized skill requirement). Creates a supervisory approval request.",
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Order not assigned to calling technician"},
+        404: {"description": "Work order not found"}
+    }
+)
 def request_reassignment(
     work_order_id: str,
     payload: WorkOrderRequestReassignment,

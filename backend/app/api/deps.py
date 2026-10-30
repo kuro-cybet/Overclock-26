@@ -10,19 +10,31 @@ from app.core.security import decode_access_token
 from app.core.permissions import check_permission
 from app.database.models.user import User
 
+security = HTTPBearer(
+    auto_error=False,
+    description="CampusOps Bearer JWT authorization token. Format: `Bearer <access_token>`"
+)
+
 
 def get_current_user(
-    authorization: Optional[str] = Header(None),
+    auth_credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    authorization: Optional[str] = Header(None, description="Optional raw Authorization header fallback"),
     db: Session = Depends(get_db)
 ) -> User:
-    if not authorization:
+    """Validate JWT bearer token and return the authenticated user."""
+    token = None
+    if auth_credentials and auth_credentials.credentials:
+        token = auth_credentials.credentials
+    elif authorization:
+        token = authorization.replace("Bearer ", "").strip()
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication token is missing.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token = authorization.replace("Bearer ", "").strip()
     payload = decode_access_token(token)
     if not payload or "sub" not in payload:
         raise HTTPException(
@@ -111,7 +123,8 @@ def require_admin_sub_role(allowed_sub_roles: List[str]):
     Non-admin roles or unauthorized sub-roles get 403 Forbidden.
     """
     def sub_role_checker(
-        authorization: Optional[str] = Header(None),
+        auth_credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+        authorization: Optional[str] = Header(None, description="Optional raw Authorization header fallback"),
         db: Session = Depends(get_db)
     ) -> User:
         if not authorization:
@@ -121,7 +134,6 @@ def require_admin_sub_role(allowed_sub_roles: List[str]):
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        token = authorization.replace("Bearer ", "").strip()
         payload = decode_access_token(token)
         if not payload or "sub" not in payload:
             raise HTTPException(

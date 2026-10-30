@@ -1,5 +1,5 @@
 from typing import Optional, List
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.explanation import DecisionExplanation
@@ -24,7 +24,9 @@ def get_similar_historical_cases(
     current_user: User = Depends(_intel_tech),
     db: Session = Depends(get_db)
 ):
-    """Retrieves verified similar past cases with diagnosis, parts used, and verified outcome."""
+    """
+    Search historical resolution repository for similar past equipment incidents.
+    """
     return historical_intelligence_service.retrieve_similar_cases(
         db=db,
         category=category,
@@ -46,8 +48,7 @@ def get_operational_assessment(
     db: Session = Depends(get_db)
 ):
     """
-    Holistic operational intelligence assessment across buildings, rooms,
-    examinations, technician workloads, inventory, and SLAs.
+    Perform full synthesized multi-dimensional campus operational risk assessment.
     """
     return operational_intelligence_service.get_full_operational_assessment(db=db)
 
@@ -75,14 +76,21 @@ def get_affected_examinations(
     """Pinpoints upcoming examinations compromised by facility or equipment faults."""
     return operational_intelligence_service.detect_affected_examinations(db=db)
 
-@router.get("/explanations")
+@router.get(
+    "/explanations",
+    response_model=List[DecisionExplanationResponse],
+    summary="Get Algorithmic Decision Explanations",
+    description="Retrieves transparent decision explanation records detailing why specific algorithmic routing or recovery actions were chosen."
+)
 def get_decision_explanations(
     decision_type: Optional[str] = None,
     limit: int = 20,
     current_user: User = Depends(_intel_admin),
     db: Session = Depends(get_db)
 ):
-    """Retrieves transparent decision explanation records for algorithmic choices."""
+    """
+    Retrieves transparent decision explanation records for algorithmic choices.
+    """
     query = db.query(DecisionExplanation)
     if decision_type:
         query = query.filter(DecisionExplanation.decision_type == decision_type)

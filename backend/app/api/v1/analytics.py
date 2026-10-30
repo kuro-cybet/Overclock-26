@@ -28,9 +28,17 @@ def get_analytics(
 ):
     return analytics_service.get_dashboard_analytics(db)
 
-@router.get("/dashboard/{portal}")
+@router.get(
+    "/dashboard/{portal}",
+    response_model=PortalDashboardResponse,
+    summary="Get Role-Tailored Portal Dashboard",
+    description="Retrieves role-specific dashboard metrics and assigned workload summaries for `admin`, `technician`, `faculty`, or `student`.",
+    responses={
+        401: {"description": "Authentication required"}
+    }
+)
 def get_portal_dashboard(
-    portal: str,
+    portal: Literal["admin", "technician", "faculty", "student"] = Path(..., description="Role portal view: `admin`, `technician`, `faculty`, or `student`"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -60,8 +68,31 @@ def get_portal_dashboard(
         return {
             "portal": "admin",
             "kpi": system_analytics["kpi"],
-            "recent_incidents": recent_incidents,
-            "pending_approvals": pending_approvals,
+            "recent_incidents": [
+                {
+                    "id": i.id,
+                    "incident_code": i.incident_code,
+                    "title": i.title,
+                    "category": i.category,
+                    "severity": i.severity,
+                    "priority": i.priority,
+                    "status": i.status,
+                    "created_at": i.created_at.isoformat() if i.created_at else None
+                }
+                for i in recent_incidents
+            ],
+            "pending_approvals": [
+                {
+                    "id": a.id,
+                    "approval_type": a.approval_type,
+                    "target_entity_type": a.target_entity_type,
+                    "cost_amount": a.cost_amount,
+                    "justification": a.justification,
+                    "status": a.status,
+                    "created_at": a.created_at.isoformat() if a.created_at else None
+                }
+                for a in pending_approvals
+            ],
             "category_distribution": system_analytics["incidents_by_category"],
             "sla_trend": system_analytics["sla_monthly_trend"],
             "readiness_summary": system_analytics["room_readiness_breakdown"]
@@ -76,6 +107,15 @@ def get_portal_dashboard(
 
         # Recent or active task
         active_task = next((w for w in my_orders if w.status in ["in_progress", "assigned"]), my_orders[0] if my_orders else None)
+        active_task_dict = None
+        if active_task:
+            active_task_dict = {
+                "id": active_task.id,
+                "work_order_code": active_task.work_order_code,
+                "title": active_task.title,
+                "status": active_task.status,
+                "priority": active_task.priority
+            }
 
         return {
             "portal": "technician",
@@ -85,8 +125,17 @@ def get_portal_dashboard(
                 "completed": completed_cnt,
                 "blocked": blocked_cnt
             },
-            "my_tasks": my_orders[:10],
-            "active_task": active_task,
+            "my_tasks": [
+                {
+                    "id": w.id,
+                    "work_order_code": w.work_order_code,
+                    "title": w.title,
+                    "status": w.status,
+                    "priority": w.priority
+                }
+                for w in my_orders[:10]
+            ],
+            "active_task": active_task_dict,
             "shift": "Morning (08:00 - 16:00)",
             "parts_shortages": system_analytics["kpi"]["parts_shortages"]
         }
@@ -116,14 +165,32 @@ def get_portal_dashboard(
                 "room_issues": active_room_issues,
                 "exam_alerts": upcoming_exams
             },
-            "timetable": timetable,
-            "my_requests": my_reports[:5]
+            "timetable": [
+                {
+                    "id": t.id,
+                    "title": t.title,
+                    "purpose": t.purpose,
+                    "start_time": t.start_time.isoformat() if t.start_time else None,
+                    "end_time": t.end_time.isoformat() if t.end_time else None,
+                    "status": t.status
+                }
+                for t in timetable
+            ],
+            "my_requests": [
+                {
+                    "id": r.id,
+                    "report_code": r.report_code,
+                    "title": r.title,
+                    "status": r.status
+                }
+                for r in my_reports[:5]
+            ]
         }
 
     elif portal == "student":
         my_reports = db.query(Report).filter(Report.reporter_id == current_user.id).all()
         relevant_campus_incidents = db.query(Incident).filter(Incident.status.in_(["open", "in_progress"])).limit(4).all()
-        
+
         return {
             "portal": "student",
             "kpi": {
@@ -132,9 +199,26 @@ def get_portal_dashboard(
                 "facility_status": "Operational (94%)",
                 "notifications": 2
             },
-            "my_requests": my_reports[:5],
-            "campus_incidents": relevant_campus_incidents
+            "my_requests": [
+                {
+                    "id": r.id,
+                    "report_code": r.report_code,
+                    "title": r.title,
+                    "status": r.status
+                }
+                for r in my_reports[:5]
+            ],
+            "campus_incidents": [
+                {
+                    "id": i.id,
+                    "incident_code": i.incident_code,
+                    "title": i.title,
+                    "category": i.category,
+                    "severity": i.severity,
+                    "status": i.status
+                }
+                for i in relevant_campus_incidents
+            ]
         }
 
     return {"portal": portal, "kpi": system_analytics["kpi"]}
-

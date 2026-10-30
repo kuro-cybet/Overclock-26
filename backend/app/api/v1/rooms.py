@@ -1,18 +1,23 @@
 from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.room import Room
 from app.database.models.campus import Building, Floor
 from app.database.models.user import User
-from app.schemas.room import RoomResponse, RoomReadinessUpdate
+from app.schemas.room import RoomResponse, RoomReadinessUpdate, BuildingSummaryResponse
 from app.core.exceptions import EntityNotFoundError
 from app.api.deps import get_current_user, require_role
 
 router = APIRouter(prefix="/rooms", tags=["rooms"])
 
-@router.get("", response_model=List[RoomResponse])
+@router.get(
+    "",
+    response_model=List[RoomResponse],
+    summary="List Campus Rooms",
+    description="Retrieves classrooms, lecture halls, laboratories, and offices across campus buildings."
+)
 def list_rooms(
     building_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
@@ -21,6 +26,9 @@ def list_rooms(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    List rooms with operational readiness and seating capacity.
+    """
     q = db.query(Room)
     if building_id:
         q = q.filter(Room.building_id == building_id)
@@ -61,13 +69,25 @@ def get_room(
         raise EntityNotFoundError("Room", room_id)
     return room
 
-@router.patch("/{room_id}/readiness", response_model=RoomResponse)
+@router.patch(
+    "/{room_id}/readiness",
+    response_model=RoomResponse,
+    summary="Update Room Daily Readiness Status",
+    description="Updates the physical daily readiness check status of a room (e.g. `confirmed_today`, `stale`, `unconfirmed`).",
+    responses={
+        401: {"description": "Authentication required"},
+        404: {"description": "Room not found"}
+    }
+)
 def update_room_readiness(
     room_id: str,
     payload: RoomReadinessUpdate,
     current_user: User = Depends(require_role(["admin", "technician"])),
     db: Session = Depends(get_db)
 ):
+    """
+    Update daily physical verification status of a room.
+    """
     room = db.query(Room).filter(Room.id == room_id).first()
     if not room:
         raise EntityNotFoundError("Room", room_id)
@@ -78,4 +98,3 @@ def update_room_readiness(
     db.commit()
     db.refresh(room)
     return room
-

@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.inventory import InventoryItem, StockReservation
@@ -22,6 +22,9 @@ def list_inventory(
     current_user: User = Depends(_inventory_reader),
     db: Session = Depends(get_db)
 ):
+    """
+    List spare parts inventory items with minimum threshold indicators.
+    """
     q = db.query(InventoryItem)
     if category:
         q = q.filter(InventoryItem.category == category)
@@ -47,6 +50,9 @@ def reserve_stock(
     current_user: User = Depends(_inventory_reader),
     db: Session = Depends(get_db)
 ):
+    """
+    Atomically reserve spare parts for work order execution.
+    """
     res = inventory_service.reserve_stock(
         db=db,
         work_order_id=payload.work_order_id,

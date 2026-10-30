@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.approval import ProcurementRequest, ApprovalRequest
@@ -21,12 +21,23 @@ def list_procurement_requests(
 ):
     return db.query(ProcurementRequest).order_by(ProcurementRequest.created_at.desc()).all()
 
-@router.post("")
+@router.post(
+    "",
+    response_model=ProcurementCreateResponse,
+    summary="Create Procurement Request",
+    description="Submits a purchase request for inventory replenishment and automatically initiates the required administrative purchase approval workflow.",
+    responses={
+        401: {"description": "Authentication required"}
+    }
+)
 def create_procurement_request(
     payload: ProcurementCreateRequest,
     current_user: User = Depends(_procurement_creator),
     db: Session = Depends(get_db)
 ):
+    """
+    Create a new procurement request with automated approval routing.
+    """
     item = db.query(InventoryItem).filter(InventoryItem.id == payload.item_id).first()
     cost = (item.unit_cost if item else 100.0) * payload.quantity
 
@@ -60,4 +71,3 @@ def create_procurement_request(
         "procurement_request": proc,
         "approval_request_id": app_req.id
     }
-

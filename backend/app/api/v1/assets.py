@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.asset import Asset
@@ -16,12 +16,16 @@ def get_predictive_fleet_overview(
     db: Session = Depends(get_db)
 ):
     """
-    Fleet-wide predictive maintenance status: healthy, attention required,
-    high risk assets, 30-day failure probabilities, and upcoming PM schedules.
+    Scans all campus physical assets and calculates failure probabilities and preventive schedules.
     """
     return predictive_maintenance_service.get_fleet_predictive_overview(db=db)
 
-@router.get("")
+@router.get(
+    "",
+    response_model=List[AssetResponse],
+    summary="List Campus Assets",
+    description="Retrieves campus physical assets (HVAC, network switches, AV projectors, lab instruments) with optional filtering by category, building, or room."
+)
 def list_assets(
     category: Optional[str] = Query(None),
     building_id: Optional[str] = Query(None),
@@ -30,6 +34,9 @@ def list_assets(
     current_user: User = Depends(require_role(["admin"])),
     db: Session = Depends(get_db)
 ):
+    """
+    List physical assets with serial numbers and inspection dates.
+    """
     q = db.query(Asset)
     if category:
         q = q.filter(Asset.category == category)
