@@ -9,6 +9,9 @@ from app.integrations.gmail_sender import EmailDeliveryError, gmail_sender
 
 logger = logging.getLogger(__name__)
 
+EMAIL_EVENT_TYPES = frozenset({"report_submitted", "incident_resolved"})
+
+
 class NotificationService:
     def create_in_app_notification(
         self,
@@ -93,11 +96,16 @@ class NotificationService:
         recipient_email: str,
         subject: str,
         body: str,
-        channel: str = "email"
+        event_type: str,
+        channel: str = "email",
     ) -> NotificationOutbox:
+        if channel == "email" and event_type not in EMAIL_EVENT_TYPES:
+            raise ValueError(f"Unsupported email lifecycle event: {event_type}")
+
         outbox = NotificationOutbox(
             recipient_email=recipient_email,
             channel=channel,
+            event_type=event_type,
             subject=subject,
             body=body,
             status="queued",
@@ -257,8 +265,20 @@ class NotificationService:
         sent_count = 0
         failed_count = 0
         skipped_count = 0
+        simulated_count = 0
 
         for item in candidates:
+            if item.channel == "email" and item.event_type not in EMAIL_EVENT_TYPES:
+                logger.warning(
+                    "[Outbox] Cancelled unclassified legacy email %s to %s.",
+                    item.id,
+                    item.recipient_email,
+                )
+                item.status = "cancelled"
+                db.commit()
+                skipped_count += 1
+                continue
+
             # Check maximum attempts
             if item.attempts >= 3:
                 item.status = "failed"
@@ -329,14 +349,18 @@ class NotificationService:
                             item.status = "failed"
                         failed_count += 1
                 else:
-                    gmail_sender.send(
+                    delivery = gmail_sender.send(
                         recipient=item.recipient_email,
                         subject=item.subject,
                         body=item.body,
                         entity_code=item.id,
                     )
-                    item.status = "sent"
-                    sent_count += 1
+                    if delivery.simulated:
+                        item.status = "simulated"
+                        simulated_count += 1
+                    else:
+                        item.status = "sent"
+                        sent_count += 1
             except EmailDeliveryError as e:
                 logger.error(f"[Outbox] Delivery failed for {item.recipient_email}: {e}")
                 item.status = "failed" if item.attempts >= 3 else "queued"
@@ -352,6 +376,7 @@ class NotificationService:
             "sent": sent_count,
             "failed": failed_count,
             "skipped_backoff": skipped_count,
+            "simulated": simulated_count,
             "delivery_mode": gmail_sender.mode,
             "timestamp": now.isoformat()
         }

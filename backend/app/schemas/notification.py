@@ -21,6 +21,7 @@ class OutboxResponse(BaseModel):
     id: str
     recipient_email: str
     channel: str
+    event_type: Optional[str] = None
     subject: str
     body: str
     status: str
@@ -36,9 +37,13 @@ class OutboxProcessResponse(BaseModel):
     sent: int
     failed: int
     skipped_backoff: int
+    simulated: int
+    delivery_mode: str
     timestamp: str
 
 class OutboxStatusResponse(BaseModel):
     queued: int
     sent: int
     failed: int
+    simulated: int
+    delivery_mode: str

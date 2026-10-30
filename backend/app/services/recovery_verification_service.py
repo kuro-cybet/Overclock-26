@@ -6,10 +6,12 @@ from sqlalchemy.orm import Session
 from app.database.models.recovery import RecoveryExecution
 from app.database.models.incident import Incident
 from app.database.models.work_order import WorkOrder
+from app.database.models.report import Report
 from app.database.models.room import Room
 from app.database.models.work_order_checklist import WorkOrderChecklistItem
 from app.database.models.user import User
 from app.services.event_service import event_service
+from app.services import workflow_notifications
 from app.core.exceptions import CampusOpsException
 
 logger = logging.getLogger(__name__)
@@ -95,6 +97,26 @@ class RecoveryVerificationService:
             if incident and incident.status != "resolved":
                 incident.status = "resolved"
                 incident.resolved_at = datetime.utcnow()
+                db.query(Report).filter(
+                    Report.incident_id == incident.id,
+                    Report.status != "rejected",
+                ).update({"status": "resolved"}, synchronize_session=False)
+                final_work_order = (
+                    db.query(WorkOrder)
+                    .filter(WorkOrder.incident_id == incident.id)
+                    .order_by(WorkOrder.completed_at.desc())
+                    .first()
+                )
+                technician = (
+                    db.query(User)
+                    .filter(User.id == final_work_order.assigned_technician_id)
+                    .first()
+                    if final_work_order and final_work_order.assigned_technician_id
+                    else None
+                )
+                workflow_notifications.incident_resolved(
+                    db, incident, final_work_order, technician
+                )
 
             event_service.log_event(
                 db=db,

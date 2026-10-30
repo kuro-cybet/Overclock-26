@@ -421,6 +421,7 @@ def update_work_order(
     # Validate state transition if status changed
     if payload.status and payload.status != wo.status:
         validate_transition("work_order", wo.status, payload.status)
+        incident_resolved = False
 
         # Enforce checklist completion before marking 'completed'
         if payload.status == "completed":
@@ -446,23 +447,34 @@ def update_work_order(
             # If all work orders for incident are completed, mark incident resolved
             inc = db.query(Incident).filter(Incident.id == wo.incident_id).first()
             if inc:
-                inc.status = "resolved"
-                inc.resolved_at = now
-                db.query(Report).filter(
-                    Report.incident_id == inc.id,
-                    Report.status != "rejected",
-                ).update({"status": "resolved"}, synchronize_session=False)
+                remaining_work_orders = (
+                    db.query(WorkOrder)
+                    .filter(
+                        WorkOrder.incident_id == inc.id,
+                        WorkOrder.id != wo.id,
+                        WorkOrder.status.notin_(["completed", "cancelled"]),
+                    )
+                    .count()
+                )
+                if remaining_work_orders == 0 and inc.status != "resolved":
+                    inc.status = "resolved"
+                    inc.resolved_at = now
+                    db.query(Report).filter(
+                        Report.incident_id == inc.id,
+                        Report.status != "rejected",
+                    ).update({"status": "resolved"}, synchronize_session=False)
 
-                technician = (
-                    db.query(User)
-                    .filter(User.id == wo.assigned_technician_id)
-                    .first()
-                    if wo.assigned_technician_id
-                    else None
-                )
-                workflow_notifications.work_order_completed(
-                    db, wo, inc, technician
-                )
+                    technician = (
+                        db.query(User)
+                        .filter(User.id == wo.assigned_technician_id)
+                        .first()
+                        if wo.assigned_technician_id
+                        else None
+                    )
+                    workflow_notifications.work_order_completed(
+                        db, wo, inc, technician
+                    )
+                    incident_resolved = True
 
         elif payload.status == "in_progress":
             inc = db.query(Incident).filter(Incident.id == wo.incident_id).first()
@@ -476,11 +488,13 @@ def update_work_order(
                 workflow_notifications.work_in_progress(db, wo, inc)
 
         wo.status = payload.status
-        try:
-            notif_st = 'resolved' if payload.status == 'completed' else payload.status
-            notification_service.notify_ticket_state_change(db=db, incident_id=wo.incident_id, new_status=notif_st)
-        except Exception:
-            pass
+        if payload.status != "completed" or incident_resolved:
+            notif_st = "resolved" if incident_resolved else payload.status
+            notification_service.notify_ticket_state_change(
+                db=db,
+                incident_id=wo.incident_id,
+                new_status=notif_st,
+            )
 
     db.commit()
     db.refresh(wo)

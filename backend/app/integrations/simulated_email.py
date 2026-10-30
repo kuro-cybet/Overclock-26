@@ -1,7 +1,6 @@
 from typing import Dict, Any
 from sqlalchemy.orm import Session
 from app.services.intake_service import intake_service
-from app.services.notification_service import notification_service
 from app.database.models.user import User
 
 class SimulatedEmailService:
@@ -24,31 +23,20 @@ class SimulatedEmailService:
             reporter_role=reporter_role,
             title=subject,
             description=body,
-            source="simulated_email"
+            source="simulated_email",
+            reporter_email=sender_email,
         )
 
         report = result["report"]
-
-        # Produce notification outbox event with delivery-attempt record
-        outbox_entry = notification_service.queue_outbox_email(
-            db=db,
-            recipient_email=sender_email,
-            subject=f"CampusOps Ticket Acknowledgment: {report.report_code}",
-            body=f"Hello,\n\nYour issue report '{report.title}' has been logged in CampusOps with reference ID {report.report_code}.\n"
-                 f"Estimated classification: {report.category.capitalize()} (Urgency: {report.urgency.capitalize()}).\n\n"
-                 f"Our campus operations dispatch team has received your ticket.",
-            channel="email"
-        )
 
         return {
             "status": "processed",
             "report_code": report.report_code,
             "category": report.category,
             "urgency": report.urgency,
-            "outbox_id": outbox_entry.id,
-            "delivery_status": outbox_entry.status,
+            "outbox_id": result["outbox_id"],
+            "delivery_status": "queued" if result["outbox_id"] else None,
             "ai_extracted": result["ai_extraction"]
         }
 
 simulated_email_service = SimulatedEmailService()
-

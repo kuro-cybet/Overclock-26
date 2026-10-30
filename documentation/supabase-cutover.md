@@ -58,6 +58,11 @@ DROP TABLE public.role_assignments;
 The provisioning command below can also migrate and remove the old table while
 upserting the demo accounts.
 
+Before deploying the email lifecycle changes, also run
+[`20261031020000_restrict_email_lifecycle.sql`](../supabase/supabase/migrations/20261031020000_restrict_email_lifecycle.sql)
+in SQL Editor. It tags existing queued emails as legacy so the updated backend
+cancels them instead of sending them after deployment.
+
 ```powershell
 python scripts/provision_roles.py --password "<DB_PASSWORD>"
 ```

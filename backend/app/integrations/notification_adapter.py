@@ -17,6 +17,7 @@ class NotificationAdapter:
             "processed": result["processed"],
             "sent": result["sent"],
             "failed": result["failed"],
+            "simulated": result["simulated"],
             "delivery_mode": result["delivery_mode"],
             "status": "processed",
         }

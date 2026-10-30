@@ -23,6 +23,7 @@ class NotificationOutbox(Base):
     recipient_email = Column(String(255), nullable=False)
     recipient_phone = Column(String(50), nullable=True, index=True)
     channel = Column(String(50), default="email", nullable=False)  # email, in_app, webhook, whatsapp
+    event_type = Column(String(50), nullable=True)
     subject = Column(String(255), nullable=False)
     body = Column(Text, nullable=False)
     status = Column(String(50), default="queued", nullable=False)  # queued, processing, sent, failed

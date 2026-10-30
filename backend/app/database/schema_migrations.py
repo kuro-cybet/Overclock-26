@@ -109,6 +109,24 @@ def _repair_users_and_rbac(conn) -> None:
 
     _ensure_role_assignment_tables(conn)
     _migrate_legacy_role_assignments(conn)
+    _repair_notification_outbox(conn)
+
+
+def _repair_notification_outbox(conn) -> None:
+    if not _table_exists(conn, "notification_outbox"):
+        return
+
+    existing = set(_columns(conn, "notification_outbox"))
+    if "event_type" not in existing:
+        conn.exec_driver_sql(
+            "ALTER TABLE notification_outbox ADD COLUMN event_type VARCHAR(50)"
+        )
+        logger.info("[schema] added notification_outbox.event_type")
+
+    conn.exec_driver_sql(
+        "UPDATE notification_outbox SET event_type = 'legacy' "
+        "WHERE event_type IS NULL AND channel = 'email'"
+    )
 
 
 def _ensure_role_assignment_tables(conn) -> None:

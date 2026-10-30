@@ -98,13 +98,24 @@ def admin_new_report(
     reporter_name: str,
     submitted_at: Optional[datetime],
     link: str,
+    incident_code: Optional[str] = None,
 ) -> tuple:
-    subject = f"CampusOps: Action needed - {report_code} is waiting for triage"
+    subject = (
+        f"CampusOps: New report {report_code} linked to {incident_code}"
+        if incident_code
+        else f"CampusOps: Action needed - {report_code} is waiting for triage"
+    )
+    opening = (
+        f"A new report was linked to existing incident {incident_code}."
+        if incident_code
+        else "A new report needs triage."
+    )
     body = "\n".join(
         [
-            "A new report needs triage.",
+            opening,
             "",
             f"Report: {report_code}",
+            *([f"Incident: {incident_code}"] if incident_code else []),
             f"Title: {title}",
             f"Category: {category}",
             f"Urgency: {urgency} ({priority})",
@@ -216,7 +227,7 @@ def incident_resolved(
     incident_code: str,
     incident_title: str,
     location: str,
-    work_order_code: str,
+    work_order_code: Optional[str],
     technician_name: str,
     completed_at: Optional[datetime],
     diagnosis: Optional[str],
@@ -228,7 +239,7 @@ def incident_resolved(
     resolution = [
         f"Incident: {incident_code} - {incident_title}",
         f"Location: {location}",
-        f"Work order: {work_order_code}",
+        f"Work order: {work_order_code or 'Not linked'}",
         f"Technician: {technician_name}",
         f"Completed: {_fmt(completed_at)}",
     ]
