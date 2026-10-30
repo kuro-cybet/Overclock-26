@@ -25,7 +25,8 @@ class IntakeService:
         category: Optional[str] = None,
         urgency: Optional[str] = None,
         source: str = "web_portal",
-        contact_phone: Optional[str] = None
+        contact_phone: Optional[str] = None,
+        reporter_email: Optional[str] = None,
     ) -> Dict[str, Any]:
         # 1. Run AI Extraction
         full_text = f"{title}. {description}"
@@ -115,13 +116,16 @@ class IntakeService:
 
         # Acknowledge the reporter (in-app + email) and alert the facilities desk
         # when the report still needs triage.  The caller commits the transaction.
-        workflow_notifications.report_submitted(db, report)
+        reporter_outbox = workflow_notifications.report_submitted(
+            db, report, reporter_email=reporter_email
+        )
 
         return {
             "report": report,
             "ai_extraction": ai_extraction,
             "matched_existing_incident": existing_incident is not None,
-            "incident_id": existing_incident.id if existing_incident else None
+            "incident_id": existing_incident.id if existing_incident else None,
+            "outbox_id": reporter_outbox.id if reporter_outbox else None,
         }
 
 def datetime_suffix():
@@ -129,4 +133,3 @@ def datetime_suffix():
     return datetime.utcnow().strftime("%Y%m")
 
 intake_service = IntakeService()
-

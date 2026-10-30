@@ -12,7 +12,7 @@ from app.schemas.notification import (
 )
 from app.core.exceptions import EntityNotFoundError
 from app.api.deps import get_current_user, require_admin_sub_role
-from app.services.notification_service import notification_service
+from app.services.notification_service import gmail_sender, notification_service
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -134,4 +134,15 @@ def get_outbox_status(
     queued = db.query(NotificationOutbox).filter(NotificationOutbox.status == "queued").count()
     sent = db.query(NotificationOutbox).filter(NotificationOutbox.status == "sent").count()
     failed = db.query(NotificationOutbox).filter(NotificationOutbox.status == "failed").count()
-    return {"queued": queued, "sent": sent, "failed": failed}
+    simulated = (
+        db.query(NotificationOutbox)
+        .filter(NotificationOutbox.status == "simulated")
+        .count()
+    )
+    return {
+        "queued": queued,
+        "sent": sent,
+        "failed": failed,
+        "simulated": simulated,
+        "delivery_mode": gmail_sender.mode,
+    }

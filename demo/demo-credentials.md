@@ -1,48 +1,21 @@
-# CampusOps · Demo Credentials
+# CampusOps · Demo Access
 
-All seed accounts are pre-configured with the default password:
-`password123`
+Sign-in uses **Continue with Google**. There are no shared passwords and no
+one-click persona buttons: the server looks up the role for the signed-in
+Google email in that role's dedicated allowlist table.
 
-You can also use the **One-Click Persona Login buttons** on the `/login` screen to instantly sign in as any of these roles.
+| Portal | Google account | Role / sub-role |
+| :--- | :--- | :--- |
+| **Operations Admin** | `rajesekersudharsan@gmail.com` | `admin` / `system_admin` |
+| **Technician** | `techtroveversion3@gmail.com` | `technician` / `maintenance_technician` |
+| **Faculty** | `susen469@gmail.com` | `faculty` |
+| **Student** | `192573020.simats@saveetha.com` | `student` |
 
----
-
-## 1. Operations & Administration Portal
-
-| Sub-Role | Name | Email | Default Password | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **System Administrator** | Dr. Sarah Mitchell | `admin@campusops.edu` | `password123` | Full control of operations & scenario simulator |
-| **Department Manager** | Prof. Arthur Pendelton | `dept_mgr@campusops.edu` | `password123` | Can authorize costly repairs & room relocations |
-| **Facilities Administrator** | Elena Rostova | `facilities@campusops.edu` | `password123` | Manages readiness & parts requisitions |
-| **Procurement Approver** | Marcus Sterling | `procurement@campusops.edu` | `password123` | Can approve emergency parts procurement |
-
----
-
-## 2. Field Technicians Portal
-
-| Sub-Role | Name | Email | Default Password | Shift / Skills |
-| :--- | :--- | :--- | :--- | :--- |
-| **Maintenance Technician** | David Miller | `tech@campusops.edu` | `password123` | Morning Shift · Network, Wi-Fi, Hardware |
-| **Maintenance Technician** | John Kowalski | `maintenance@campusops.edu` | `password123` | Evening Shift · Electrical, HVAC |
-| **Floor Incharge** | Maria Santos | `floor_incharge@campusops.edu` | `password123` | Morning Shift · Floor inspection & signoff |
-| **Janitor** | Bob Jenkins | `janitor@campusops.edu` | `password123` | Morning Shift · Sanitation & Cleaning |
-| **Room Incharge** | Chloe Bennett | `room_incharge@campusops.edu` | `password123` | Morning Shift · Room AV & Readiness |
-
----
-
-## 3. Faculty Academic Portal
-
-| Role | Name | Email | Default Password | Department |
-| :--- | :--- | :--- | :--- | :--- |
-| **Faculty Lead** | Prof. Alistair Finch | `faculty@campusops.edu` | `password123` | Computer Science (CS304 Exam lead) |
-| **Faculty Member** | Dr. Eleanor Smith | `prof.smith@campusops.edu` | `password123` | Electrical Engineering |
-
----
-
-## 4. Students Service Desk
-
-| Role | Name | Email | Default Password | Department |
-| :--- | :--- | :--- | :--- | :--- |
-| **Student** | Jordan Lee | `student@campusops.edu` | `password123` | Computer Science |
-| **Student** | Samantha Green | `student1@campusops.edu` | `password123` | Electrical Engineering |
-
+* Only these four Google accounts can sign in; any other account gets `403`.
+* Your role is applied by the server and cannot be chosen or changed from the
+  browser.
+* The system administrator can preview the other portals from inside the admin
+  portal.
+* Password sign-in is disabled by default. It can be re-enabled for a local
+  fallback with `PASSWORD_LOGIN_ENABLED=true`, in which case the accounts use
+  the password set by `provision_roles.py` (default `password123`).

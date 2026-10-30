@@ -41,7 +41,7 @@ The main Cisco Access Point in Computer Lab A fails. Four students sitting in th
 5. Open **Incidents & Triage** (`/admin/incidents`):
    - See the canonical incident with badge **4 Linked Reports**.
    - Inspect details: each original student complaint is preserved with reporter identity, timestamp, and metadata.
-6. Targeted notifications are automatically queued in the **Notification Outbox** (`/api/v1/integrations/email/outbox`) notifying each student that their ticket has been merged and dispatched.
+6. Each student receives an in-app update when their report is linked to the incident. Email is reserved for the original report submission and the final resolution.
 
 ---
 
@@ -83,4 +83,3 @@ A technician needs an Enterprise Wi-Fi 6 AP Module (`INV-NET-007`), but central 
 
 ## Baseline Reset
 At any point, click **Reset Baseline State** in the simulator or run `scripts\reset-database.bat` to restore pristine seed data.
-

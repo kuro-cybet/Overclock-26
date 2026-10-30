@@ -16,6 +16,20 @@ When the credentials are missing, delivery is **simulated** so local development
 and the test suite keep working. Set `EMAIL_DELIVERY_MODE=gmail` to make missing
 credentials a hard failure instead.
 
+CampusOps emails the reporter when a request or complaint is submitted, alerts
+the facilities email recipient for every new report (including reports linked
+to an existing incident), and emails
+reporters again only after all work orders for the incident are complete.
+Assignment, triage, and in-progress updates remain in-app notifications.
+Email outbox entries from older workflows are cancelled rather than delivered.
+The function sends only to the actual recipient; remove the obsolete
+`CAMPUSOPS_ALWAYS_CC` Edge Function secret if it was previously configured.
+
+Before deploying the backend change, apply
+[`20261031020000_restrict_email_lifecycle.sql`](../supabase/supabase/migrations/20261031020000_restrict_email_lifecycle.sql)
+in the Supabase SQL Editor. Then redeploy the `send-campusops-email` function and
+the backend.
+
 ---
 
 ## 1. Prepare Google Cloud (one time)
@@ -89,26 +103,11 @@ supabase secrets set `
   GOOGLE_REFRESH_TOKEN="<refresh-token>" `
   GOOGLE_SENDER_EMAIL="campusops.notifications@gmail.com" `
   CAMPUSOPS_WEBHOOK_SECRET="<random-32+-char-secret>" `
-  CAMPUSOPS_TEST_RECIPIENT="you@example.com" `
-  CAMPUSOPS_ALWAYS_CC="you@example.com"
+  CAMPUSOPS_TEST_RECIPIENT="you@example.com"
 ```
 
 Or use **Supabase Dashboard → Project Settings → Edge Functions → Secrets**.
 `CAMPUSOPS_TEST_RECIPIENT` caps the `test_email` event to a fixed inbox.
-
-### Demo catch-all copy
-
-Set `CAMPUSOPS_ALWAYS_CC` to receive a **Cc copy of every notification** while the
-real recipient stays in `To:`:
-
-```text
-To: student@campusops.edu
-Cc: suvedhansuveg14@gmail.com
-```
-
-If `CAMPUSOPS_ALWAYS_CC` is not set, the function falls back to
-`CAMPUSOPS_TEST_RECIPIENT`. The copy is skipped when it would duplicate the
-primary recipient. Unset both secrets to disable the catch-all.
 
 ---
 
@@ -136,10 +135,12 @@ EMAIL_DELIVERY_MODE=auto        # auto | gmail | simulated
 EMAIL_DELIVERY_TIMEOUT_SECONDS=15
 ```
 
-Restart the backend. `GET /api/v1/notifications/outbox/status` and the
-`delivery_mode` field returned by `POST /api/v1/notifications/outbox/process`
-show whether real Gmail delivery is active. Both endpoints require a
-`system_admin` bearer token.
+Set `EMAIL_DELIVERY_MODE=gmail` on the Render backend so missing delivery
+credentials fail visibly instead of silently simulating mail. Restart/redeploy
+the backend. `GET /api/v1/notifications/outbox/status` shows the delivery mode
+and simulated count; `POST /api/v1/notifications/outbox/process` includes a
+`simulated` count and `delivery_mode`. Both endpoints require a `system_admin`
+bearer token.
 
 ---
 
@@ -180,9 +181,8 @@ Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/v1/notifications/o
   -Headers $headers
 ```
 
-The response should report `"delivery_mode": "gmail"` and `"sent": 1`, the
-acknowledgement email should arrive in the recipient inbox, and a copy should
-land in `CAMPUSOPS_ALWAYS_CC` (or `CAMPUSOPS_TEST_RECIPIENT`). The background
+The response should report `"delivery_mode": "gmail"` and `"sent": 1`, and the
+acknowledgement email should arrive in the recipient inbox. The background
 outbox worker also processes queued mail every 5 seconds, so the manual trigger
 may return `"sent": 0` if the worker already delivered it.
 
@@ -199,7 +199,6 @@ may return `"sent": 0` if the worker already delivered it.
 | `Invalid or expired request signature.` | `CAMPUSOPS_WEBHOOK_SECRET` differs between backend and Supabase, or the machine clock is >5 minutes off. |
 | `Email delivery failed. Check function logs.` | Inspect `supabase functions logs send-campusops-email`; the backend sanitises errors on purpose. |
 | Emails silently simulated | `SUPABASE_URL` or `CAMPUSOPS_WEBHOOK_SECRET` is empty in `backend/.env`. Check `delivery_mode`. |
-| Real recipients get mail but the demo inbox doesn't | `CAMPUSOPS_ALWAYS_CC` and `CAMPUSOPS_TEST_RECIPIENT` are both empty, or the copy address equals the recipient. |
 | Function deploy can't find config | Run the command from the `supabase/` directory (the CLI locates `supabase/supabase/config.toml`). |
 
 ## Files involved

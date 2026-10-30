@@ -132,7 +132,7 @@ class AssignmentService:
 
         db.flush()
 
-        # Notify the technician (in-app + email) and, on reassignment, the reporter.
+        # Notify the technician in-app and, on reassignment, the reporter.
         workflow_notifications.work_order_assigned(
             db,
             wo,
@@ -144,4 +144,3 @@ class AssignmentService:
         return wo
 
 assignment_service = AssignmentService()
-

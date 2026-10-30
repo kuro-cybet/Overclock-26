@@ -1,11 +1,11 @@
-"""Lifecycle notifications: in-app alerts plus queued email for each hand-off.
+"""Lifecycle notifications: in-app alerts throughout, email at intake and resolution.
 
 Callers (intake, correlation, assignment, work-order API) call these helpers at
-the moment a workflow event happens.  The helpers only add rows and flush; the
-owning endpoint/service commits the transaction.
+the moment a workflow event happens. Emails are queued only when a report is
+submitted and when all work for its incident is resolved. The helpers only add
+rows and flush; the owning endpoint/service commits the transaction.
 """
 
-import json
 import logging
 from typing import List, Optional, Tuple
 
@@ -19,7 +19,7 @@ from app.database.models.room import Room
 from app.database.models.user import User
 from app.database.models.work_order import WorkOrder
 from app.services import email_templates
-from app.services.notification_service import notification_service
+from app.services.notification_service import EMAIL_EVENT_TYPES, notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -77,14 +77,39 @@ def _notify(
     )
 
 
-def _email(db: Session, user: Optional[User], subject: str, body: str) -> None:
-    if not user or not user.email:
+def _queue_email(
+    db: Session,
+    recipient_email: Optional[str],
+    subject: str,
+    body: str,
+    event_type: str,
+):
+    if not recipient_email:
         return
-    notification_service.queue_outbox_email(
+    if event_type not in EMAIL_EVENT_TYPES:
+        raise ValueError(f"Unsupported email lifecycle event: {event_type}")
+    return notification_service.queue_outbox_email(
         db=db,
-        recipient_email=user.email,
+        recipient_email=recipient_email,
         subject=subject,
         body=body,
+        event_type=event_type,
+    )
+
+
+def _email(
+    db: Session,
+    user: Optional[User],
+    subject: str,
+    body: str,
+    event_type: str,
+):
+    return _queue_email(
+        db,
+        user.email if user else None,
+        subject,
+        body,
+        event_type,
     )
 
 
@@ -130,7 +155,11 @@ def _reporter_path(report: Report) -> str:
     return _REPORTER_LINKS.get(report.reporter_role, "/student/requests")
 
 
-def report_submitted(db: Session, report: Report) -> None:
+def report_submitted(
+    db: Session,
+    report: Report,
+    reporter_email: Optional[str] = None,
+):
     """Acknowledge the reporter and, when untriaged, alert the facilities desk."""
     reporter = _user(db, report.reporter_id)
     location = _location(db, report.building_id, report.room_id)
@@ -140,7 +169,9 @@ def report_submitted(db: Session, report: Report) -> None:
         else None
     )
 
-    if reporter:
+    reporter_outbox = None
+    email = reporter.email if reporter else reporter_email
+    if email:
         subject, body = email_templates.report_received(
             report_code=report.report_code,
             title=report.title,
@@ -149,11 +180,15 @@ def report_submitted(db: Session, report: Report) -> None:
             priority=_priority_for(report),
             location=location,
             submitted_at=report.created_at,
-            reporter_name=reporter.name,
+            reporter_name=reporter.name if reporter else email.split("@")[0],
             link=_link(_reporter_path(report)),
             incident_code=incident.incident_code if incident else None,
         )
-        _email(db, reporter, subject, body)
+        reporter_outbox = _queue_email(
+            db, email, subject, body, "report_submitted"
+        )
+
+    if reporter:
         _notify(
             db,
             reporter,
@@ -174,18 +209,24 @@ def report_submitted(db: Session, report: Report) -> None:
             path=_reporter_path(report),
         )
 
-    if incident:
-        return
-
     reporter_name = reporter.name if reporter else "A campus user"
     for admin in _admin_users(db):
         _notify(
             db,
             admin,
-            title=f"New report needs triage: {report.report_code}",
+            title=(
+                f"New report linked to {incident.incident_code}: {report.report_code}"
+                if incident
+                else f"New report needs triage: {report.report_code}"
+            ),
             message=(
                 f"{report.title} ({report.category}, {report.urgency}) reported at "
-                f"{location}. Open triage to create the incident and dispatch a technician."
+                f"{location}. "
+                + (
+                    f"It was linked to incident {incident.incident_code}."
+                    if incident
+                    else "Open triage to create the incident and dispatch a technician."
+                )
             ),
             notif_type="action_required",
             path="/admin/incidents",
@@ -203,8 +244,11 @@ def report_submitted(db: Session, report: Report) -> None:
             reporter_name=reporter_name,
             submitted_at=report.created_at,
             link=_link("/admin/incidents"),
+            incident_code=incident.incident_code if incident else None,
         )
-        _email(db, admin, subject, body)
+        _email(db, admin, subject, body, "report_submitted")
+
+    return reporter_outbox
 
 
 def report_triaged(
@@ -214,24 +258,10 @@ def report_triaged(
     work_order: Optional[WorkOrder] = None,
     technician: Optional[User] = None,
 ) -> None:
-    """Tell the reporter which incident and technician now own the issue."""
+    """Notify the reporter in-app when the report enters tracked work."""
     reporter = _user(db, report.reporter_id)
     if not reporter:
         return
-
-    location = _location(db, incident.building_id, incident.room_id)
-    subject, body = email_templates.report_triaged(
-        report_code=report.report_code,
-        incident_code=incident.incident_code,
-        incident_title=incident.title,
-        priority=incident.priority,
-        location=location,
-        sla_due_at=incident.sla_due_at,
-        work_order_code=work_order.work_order_code if work_order else None,
-        technician_name=technician.name if technician else None,
-        link=_link(_reporter_path(report)),
-    )
-    _email(db, reporter, subject, body)
 
     if work_order and technician:
         detail = (
@@ -262,39 +292,10 @@ def work_order_assigned(
     technician: Optional[User],
     is_reassignment: bool = False,
 ) -> None:
-    """Notify the technician that a job is theirs; reporters only on reassignment."""
+    """Notify the technician in-app when a job is assigned."""
     if not technician:
         return
 
-    location = _location(
-        db,
-        incident.building_id if incident else None,
-        incident.room_id if incident else None,
-    )
-
-    try:
-        required_skills = (
-            json.loads(work_order.required_skills)
-            if work_order.required_skills
-            else []
-        )
-    except Exception:
-        required_skills = []
-
-    subject, body = email_templates.work_order_assigned(
-        work_order_code=work_order.work_order_code,
-        title=work_order.title,
-        description=work_order.description,
-        priority=work_order.priority,
-        location=location,
-        sla_deadline=work_order.sla_deadline,
-        incident_code=incident.incident_code if incident else "Not linked",
-        required_skills=required_skills,
-        technician_name=technician.name,
-        link=_link("/technician/tasks"),
-        is_reassignment=is_reassignment,
-    )
-    _email(db, technician, subject, body)
     _notify(
         db,
         technician,
@@ -331,21 +332,8 @@ def work_order_created(
     incident: Incident,
     technician: Optional[User],
 ) -> None:
-    """Inform reporters when an admin creates a work order outside triage."""
+    """Notify reporters in-app when an admin creates a work order."""
     for report, reporter in _reporters_for_incident(db, incident.id):
-        location = _location(db, incident.building_id, incident.room_id)
-        subject, body = email_templates.report_triaged(
-            report_code=report.report_code,
-            incident_code=incident.incident_code,
-            incident_title=incident.title,
-            priority=incident.priority,
-            location=location,
-            sla_due_at=incident.sla_due_at,
-            work_order_code=work_order.work_order_code,
-            technician_name=technician.name if technician else None,
-            link=_link(_reporter_path(report)),
-        )
-        _email(db, reporter, subject, body)
         _notify(
             db,
             reporter,
@@ -401,6 +389,15 @@ def work_order_completed(
     incident: Incident,
     technician: Optional[User],
 ) -> None:
+    incident_resolved(db, incident, work_order, technician)
+
+
+def incident_resolved(
+    db: Session,
+    incident: Incident,
+    work_order: Optional[WorkOrder] = None,
+    technician: Optional[User] = None,
+) -> None:
     location = _location(db, incident.building_id, incident.room_id)
     technician_name = technician.name if technician else "Campus facilities"
 
@@ -410,14 +407,16 @@ def work_order_completed(
             incident_code=incident.incident_code,
             incident_title=incident.title,
             location=location,
-            work_order_code=work_order.work_order_code,
+            work_order_code=work_order.work_order_code if work_order else "Not linked",
             technician_name=technician_name,
-            completed_at=work_order.completed_at,
-            diagnosis=work_order.diagnosis,
+            completed_at=(
+                work_order.completed_at if work_order else incident.resolved_at
+            ),
+            diagnosis=work_order.diagnosis if work_order else None,
             reporter_name=reporter.name,
             link=_link(_reporter_path(report)),
         )
-        _email(db, reporter, subject, body)
+        _email(db, reporter, subject, body, "incident_resolved")
         _notify(
             db,
             reporter,

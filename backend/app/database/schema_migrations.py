@@ -4,13 +4,13 @@ The repository ships a tracked ``campusops.db`` that was created by an older
 version of the models.  ``Base.metadata.create_all`` never alters existing
 tables, so a few column definitions drifted from the current models.
 
-This module only runs for SQLite and only when it detects the drift, so it is
-safe on fresh databases, Postgres deployments and repeated startups.
+SQLite schema repairs run only when drift is detected. The role-assignment
+migration helper is also used by provisioning on PostgreSQL deployments.
 """
 
 import logging
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, text
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,140 @@ CREATE TABLE recovery_actions_new (
     FOREIGN KEY(execution_id) REFERENCES recovery_executions (id) ON DELETE CASCADE
 )
 """
+
+
+# Columns added to `users` for Google sign-in after the tracked SQLite file was
+# created.  Kept in sync with app/database/models/user.py.
+_USER_COLUMNS = {
+    "auth_provider": "VARCHAR(20) DEFAULT 'password'",
+    "provider_subject": "VARCHAR(255)",
+    "email_verified": "BOOLEAN DEFAULT 0",
+    "last_login_at": "DATETIME",
+}
+
+_ROLE_ASSIGNMENT_TABLES = {
+    "admin": "admin_assignments",
+    "technician": "technician_assignments",
+    "faculty": "faculty_assignments",
+    "student": "student_assignments",
+}
+
+_ROLE_ASSIGNMENT_COLUMNS = """
+    id VARCHAR(36) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    sub_role VARCHAR(50),
+    department VARCHAR(100),
+    building_id VARCHAR(36),
+    floor_id VARCHAR(36),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    invited_by VARCHAR(36),
+    created_at TIMESTAMP NOT NULL,
+    consumed_at TIMESTAMP,
+    PRIMARY KEY (id)
+"""
+
+
+def _table_exists(conn, table: str) -> bool:
+    row = conn.exec_driver_sql(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone()
+    return row is not None
+
+
+def _repair_users_and_rbac(conn) -> None:
+    """Add the OAuth columns and role-specific allowlist tables if missing."""
+    if _table_exists(conn, "users"):
+        existing = set(_columns(conn, "users"))
+        for column, ddl in _USER_COLUMNS.items():
+            if column not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE users ADD COLUMN {column} {ddl}")
+                logger.info("[schema] added users.%s", column)
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_users_provider_subject "
+            "ON users (provider_subject)"
+        )
+
+    _ensure_role_assignment_tables(conn)
+    _migrate_legacy_role_assignments(conn)
+    _repair_notification_outbox(conn)
+
+
+def _repair_notification_outbox(conn) -> None:
+    if not _table_exists(conn, "notification_outbox"):
+        return
+
+    existing = set(_columns(conn, "notification_outbox"))
+    if "event_type" not in existing:
+        conn.exec_driver_sql(
+            "ALTER TABLE notification_outbox ADD COLUMN event_type VARCHAR(50)"
+        )
+        logger.info("[schema] added notification_outbox.event_type")
+
+    conn.exec_driver_sql(
+        "UPDATE notification_outbox SET event_type = 'legacy' "
+        "WHERE event_type IS NULL AND channel = 'email'"
+    )
+
+
+def _ensure_role_assignment_tables(conn) -> None:
+    for table in _ROLE_ASSIGNMENT_TABLES.values():
+        conn.exec_driver_sql(
+            f"CREATE TABLE IF NOT EXISTS {table} ({_ROLE_ASSIGNMENT_COLUMNS})"
+        )
+        conn.exec_driver_sql(
+            f"CREATE UNIQUE INDEX IF NOT EXISTS ix_{table}_email ON {table} (email)"
+        )
+        logger.debug("[schema] ensured %s table", table)
+
+
+def _migrate_legacy_role_assignments(conn) -> None:
+    if not _table_exists(conn, "role_assignments"):
+        return
+
+    rows = conn.execute(text("SELECT * FROM role_assignments")).mappings().all()
+    unsupported = sorted({row["role"] for row in rows} - _ROLE_ASSIGNMENT_TABLES.keys())
+    if unsupported:
+        raise ValueError(
+            "Cannot migrate role_assignments with unsupported roles: "
+            + ", ".join(unsupported)
+        )
+
+    columns = (
+        "id",
+        "email",
+        "sub_role",
+        "department",
+        "building_id",
+        "floor_id",
+        "is_active",
+        "invited_by",
+        "created_at",
+        "consumed_at",
+    )
+    values = ", ".join(f":{column}" for column in columns)
+    updates = ", ".join(
+        f"{column} = excluded.{column}" for column in columns if column != "id"
+    )
+    for row in rows:
+        table = _ROLE_ASSIGNMENT_TABLES[row["role"]]
+        conn.execute(
+            text(
+                f"INSERT INTO {table} ({', '.join(columns)}) "
+                f"VALUES ({values}) "
+                f"ON CONFLICT (email) DO UPDATE SET {updates}"
+            ),
+            {column: row[column] for column in columns},
+        )
+
+    conn.exec_driver_sql("DROP TABLE role_assignments")
+    logger.info("[schema] migrated %s legacy role assignments", len(rows))
+
+
+def migrate_role_assignments(engine: Engine) -> None:
+    """Create the role allowlists and migrate the legacy table on any supported DB."""
+    with engine.begin() as conn:
+        _ensure_role_assignment_tables(conn)
+        _migrate_legacy_role_assignments(conn)
 
 
 def _columns(conn, table: str):
@@ -169,6 +303,7 @@ def run_startup_migrations(engine: Engine) -> None:
 
     try:
         with engine.begin() as conn:
+            _repair_users_and_rbac(conn)
             _repair_recovery_schema(conn)
             rep_cols = _columns(conn, "reports")
             if rep_cols and "contact_phone" not in rep_cols:

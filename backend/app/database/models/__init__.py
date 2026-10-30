@@ -12,6 +12,12 @@ from app.database.models.approval import ApprovalRequest, ProcurementRequest
 from app.database.models.notification import Notification, NotificationOutbox
 from app.database.models.audit import AuditLog
 from app.database.models.intelligence import HistoricalResolution, PredictiveAlert
+from app.database.models.role_assignment import (
+    AdminAssignment,
+    FacultyAssignment,
+    StudentAssignment,
+    TechnicianAssignment,
+)
 
 # V2 Models matching existing database schema
 from app.database.models.technician_skill import Skill, TechnicianSkill, WorkOrderSkillRequirement
@@ -47,6 +53,10 @@ __all__ = [
     "AuditLog",
     "HistoricalResolution",
     "PredictiveAlert",
+    "AdminAssignment",
+    "TechnicianAssignment",
+    "FacultyAssignment",
+    "StudentAssignment",
     # V2
     "Skill",
     "TechnicianSkill",

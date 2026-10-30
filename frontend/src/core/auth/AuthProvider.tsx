@@ -18,6 +18,7 @@ interface AuthContextType {
   previewOf: User | null;
   isSystemAdmin: boolean;
   login: (email: string, password?: string) => Promise<User>;
+  loginWithGoogle: (credential: string) => Promise<User>;
   logout: () => void;
   impersonate: (role: string) => Promise<User>;
   exitPreview: () => void;
@@ -110,6 +111,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return res.user;
   };
 
+  const loginWithGoogle = async (credential: string): Promise<User> => {
+    const res = await api.googleLogin(credential);
+
+    localStorage.removeItem(PREVIEW_KEY);
+    localStorage.setItem(TOKEN_KEY, res.access_token);
+
+    setPreviewOf(null);
+    setToken(res.access_token);
+    setUser(res.user);
+    setLoading(false);
+    return res.user;
+  };
+
   const logout = () => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(PREVIEW_KEY);
@@ -166,7 +180,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, previewOf, isSystemAdmin, login, logout, impersonate, exitPreview }}
+      value={{ user, token, loading, previewOf, isSystemAdmin, login, loginWithGoogle, logout, impersonate, exitPreview }}
     >
       {children}
     </AuthContext.Provider>

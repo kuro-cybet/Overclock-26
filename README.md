@@ -66,20 +66,23 @@ Open **http://localhost:5173** in your browser.
 
 ---
 
-## 🔑 Demo Access & One-Click Persona Switching
+## 🔑 Demo Access
 
-All accounts use the password: `password123`
+Sign-in uses **Continue with Google**. Only Google accounts listed in the
+matching server-side role allowlist (`admin_assignments`,
+`technician_assignments`, `faculty_assignments`, or `student_assignments`) can
+enter, and the server picks the portal from that table — the client never sends
+a role.
 
-The login page features **One-Click Persona buttons** to jump instantly into any portal:
+| Portal | Google account |
+| --- | --- |
+| Operations Admin (`system_admin`) | `rajesekersudharsan@gmail.com` |
+| Technician (`maintenance_technician`) | `techtroveversion3@gmail.com` |
+| Faculty | `susen469@gmail.com` |
+| Student | `192573020.simats@saveetha.com` |
 
-- **Admin Portal**: `admin@campusops.edu` (Dr. Sarah Mitchell, System Admin)
-- **Department Manager**: `dept_mgr@campusops.edu` (Prof. Arthur Pendelton)
-- **Facilities Admin**: `facilities@campusops.edu` (Elena Rostova)
-- **Procurement Approver**: `procurement@campusops.edu` (Marcus Sterling)
-- **Technicians Portal**: `tech@campusops.edu` (David Miller, Maintenance Tech)
-- **Floor Incharge**: `floor_incharge@campusops.edu` (Maria Santos)
-- **Faculty Portal**: `faculty@campusops.edu` (Prof. Alistair Finch)
-- **Students Portal**: `student@campusops.edu` (Jordan Lee)
+Password sign-in is disabled by default. Set `PASSWORD_LOGIN_ENABLED=true` only
+if you need the password fallback for local demos.
 
 ---
 
@@ -202,4 +205,3 @@ CampusOps/
 ├── .gitignore
 └── README.md
 ```
-

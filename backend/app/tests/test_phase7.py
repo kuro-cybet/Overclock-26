@@ -242,6 +242,7 @@ def test_notification_outbox_retry_and_backoff():
         channel="email",
         subject="Retry Test Subject",
         body="Testing retry and exponential backoff",
+        event_type="report_submitted",
         status="queued",
         attempts=1,
         last_attempt_at=datetime.utcnow()  # Just attempted, should be skipped due to 10s backoff
@@ -268,7 +269,9 @@ def test_notification_outbox_retry_and_backoff():
         # Re-process: now it should proceed
         result2 = notification_service.process_pending_outbox(db=db, max_items=50)
         refreshed2 = db.query(NotificationOutbox).filter(NotificationOutbox.id == test_id).first()
-        assert refreshed2.status == "sent"
+        assert result2["sent"] == 0
+        assert result2["simulated"] >= 1
+        assert refreshed2.status == "simulated"
         assert refreshed2.attempts == 2
 
     finally:
@@ -337,6 +340,7 @@ def test_duplicate_event_handling():
         channel="email",
         subject="Already Delivered",
         body="Duplicate prevention test",
+        event_type="report_submitted",
         status="sent",
         attempts=1,
         last_attempt_at=datetime.utcnow()
@@ -356,5 +360,3 @@ def test_duplicate_event_handling():
         db.query(NotificationOutbox).filter(NotificationOutbox.id == sent_id).delete()
         db.commit()
         db.close()
-
-
