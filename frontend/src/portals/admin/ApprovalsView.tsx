@@ -51,7 +51,7 @@ export const ApprovalsView: React.FC = () => {
       accessor: 'approval_type' as const,
       render: (r: any) => (
         <span className="font-bold text-[#345873] capitalize text-xs">
-          {r.approval_type.replace(/_/g, ' ')}
+          {(r.approval_type ? String(r.approval_type) : 'General').replace(/_/g, ' ')}
         </span>
       )
     },
@@ -137,7 +137,7 @@ export const ApprovalsView: React.FC = () => {
         <ShieldAlert size={18} className="text-[#F29877] shrink-0" />
         <p>
           Logged in as <span className="font-bold">{user?.name}</span> ({user?.role}{' '}
-          {user?.sub_role ? `• ${user.sub_role.replace(/_/g, ' ')}` : ''}). If you attempt to approve your own submission, the backend will strictly enforce the separation of duties policy and return HTTP 403 Forbidden.
+          {user?.sub_role ? `• ${String(user.sub_role).replace(/_/g, ' ')}` : ''}). If you attempt to approve your own submission, the backend will strictly enforce the separation of duties policy and return HTTP 403 Forbidden.
         </p>
       </div>
 

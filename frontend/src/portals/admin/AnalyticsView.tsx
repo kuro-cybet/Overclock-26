@@ -81,7 +81,7 @@ export const AnalyticsView: React.FC = () => {
   }));
 
   const workOrderStatusData = Object.entries(analytics?.work_orders_by_status || {}).map(([key, val]) => ({
-    name: key.replace(/_/g, ' ').toUpperCase(),
+    name: String(key || '').replace(/_/g, ' ').toUpperCase(),
     count: val
   }));
 

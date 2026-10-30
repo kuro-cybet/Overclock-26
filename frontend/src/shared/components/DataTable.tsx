@@ -10,7 +10,7 @@ interface Column<T> {
 
 interface DataTableProps<T> {
   columns: Column<T>[];
-  data: T[];
+  data?: T[] | null;
   keyField: keyof T;
   emptyMessage?: string;
   onRowClick?: (row: T) => void;
@@ -27,14 +27,15 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Pagination calculation
-  const totalItems = data.length;
+  // Pagination calculation with null safety
+  const safeData = Array.isArray(data) ? data : [];
+  const totalItems = safeData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   
   // Guard current page when data length changes
   const validPage = Math.min(currentPage, totalPages);
   const startIndex = (validPage - 1) * pageSize;
-  const paginatedData = data.slice(startIndex, startIndex + pageSize);
+  const paginatedData = safeData.slice(startIndex, startIndex + pageSize);
 
   const goToPage = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
@@ -46,7 +47,7 @@ export function DataTable<T>({
         <table className="w-full text-left text-sm">
           <thead className="bg-[#FFF4E9]/80 text-[#345873] border-b border-slate-200 uppercase tracking-wider text-xs font-black">
             <tr>
-              {columns.map((col, idx) => (
+              {(columns || []).map((col, idx) => (
                 <th key={idx} className={`py-4 px-5 font-bold ${col.className || ''}`}>
                   {col.header}
                 </th>
@@ -57,26 +58,26 @@ export function DataTable<T>({
             {paginatedData.length === 0 ? (
               <tr>
                 <td
-                  colSpan={columns.length}
+                  colSpan={(columns || []).length || 1}
                   className="py-12 px-5 text-center text-slate-400 font-medium italic text-sm"
                 >
                   {emptyMessage}
                 </td>
               </tr>
             ) : (
-              paginatedData.map((row) => (
+              paginatedData.map((row, rowIdx) => (
                 <tr
-                  key={String(row[keyField])}
+                  key={row && row[keyField] != null ? String(row[keyField]) : `row-${rowIdx}`}
                   onClick={() => onRowClick && onRowClick(row)}
                   className={`hover:bg-[#FFF4E9]/30 transition ${
                     onRowClick ? 'cursor-pointer' : ''
                   }`}
                 >
-                  {columns.map((col, idx) => (
+                  {(columns || []).map((col, idx) => (
                     <td key={idx} className={`py-4 px-5 text-slate-700 ${col.className || ''}`}>
                       {col.render
                         ? col.render(row)
-                        : col.accessor
+                        : col.accessor && row
                         ? String(row[col.accessor] ?? '')
                         : null}
                     </td>

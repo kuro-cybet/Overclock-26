@@ -42,6 +42,8 @@ class BookingResponse(BaseModel):
     created_at: datetime
 
 class ExaminationSessionResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     id: str
     booking_code: str
     title: str
@@ -53,14 +55,16 @@ class ExaminationSessionResponse(BaseModel):
     room_number: str
     room_name: str
     building_name: str
-    room_status: str
-    daily_readiness_status: str
+    room_status: Optional[str] = "available"
+    daily_readiness_status: Optional[str] = "uninspected"
     equipment_required: Optional[str] = None
     has_open_incident: bool
     incident_title: Optional[str] = None
     status: str
 
 class ExamReadinessResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     status: str
     readiness_status: str
     booking_id: str

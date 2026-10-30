@@ -1,13 +1,14 @@
 import React from 'react';
 
 interface StatusBadgeProps {
-  status: string;
+  status?: string | null;
   type?: 'status' | 'priority' | 'urgency' | 'readiness';
   className?: string;
 }
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = '' }) => {
-  const norm = (status || '').toLowerCase().replace(/[\s-]/g, '_');
+  const rawStatus = typeof status === 'string' ? status : (status ? String(status) : '');
+  const norm = rawStatus.toLowerCase().replace(/[\s-]/g, '_');
 
   let style = 'bg-gray-100 text-gray-700 border-gray-300';
 
@@ -23,7 +24,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = ''
     style = 'bg-purple-50 text-purple-700 border-purple-200';
   }
 
-  const label = status.replace(/_/g, ' ');
+  const label = rawStatus ? rawStatus.replace(/_/g, ' ') : 'N/A';
 
   return (
     <span
@@ -34,4 +35,3 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = ''
     </span>
   );
 };
-

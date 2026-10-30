@@ -68,16 +68,11 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({ allowedRoles, allowedSubRo
           <div className="w-16 h-16 bg-[#EAF3F9] rounded-full flex items-center justify-center mx-auto mb-4 text-[#345873]">
             <Eye size={34} />
           </div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-[#F29877] mb-1">
-            System Administrator
-          </p>
-          <h2 className="text-2xl font-bold text-[#345873] mb-2">
-            Preview the {ROLE_LABELS[previewableRole] || previewableRole} Portal
-          </h2>
-          <p className="text-gray-600 text-sm mb-6">
-            This area belongs to the{' '}
-            <span className="font-semibold text-[#345873]">
-              {ROLE_LABELS[previewableRole] || previewableRole}
+          <h2 className="text-2xl font-bold text-[#345873] mb-2">Restricted Access</h2>
+          <p className="text-gray-600 text-sm mb-4">
+            Your current sub-role{' '}
+            <span className="font-semibold text-[#345873] uppercase tracking-wide px-2 py-0.5 bg-gray-100 rounded">
+              {user?.sub_role ? String(user.sub_role).replace(/_/g, ' ') : user?.role || 'Guest'}
             </span>{' '}
             portal. Open it as a {previewableRole} to see exactly what that role sees. Your admin
             session stays active and can be restored at any time.

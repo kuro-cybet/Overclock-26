@@ -50,7 +50,7 @@ export const StaffView: React.FC = () => {
       accessor: 'sub_role' as const,
       render: (r: any) => (
         <span className="font-semibold text-gray-700 capitalize text-xs">
-          {r.sub_role ? r.sub_role.replace(/_/g, ' ') : 'Technician'}
+          {r.sub_role ? String(r.sub_role).replace(/_/g, ' ') : 'Technician'}
         </span>
       )
     },

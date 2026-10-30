@@ -17,17 +17,19 @@ class HistoricalCaseResponse(BaseModel):
 class PredictiveAlertResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
+    id: Optional[str] = None
     alert_type: str
-    affected_entity_type: str
-    affected_entity_id: str
     title: str
-    evidence_refs: str
-    trigger_threshold: str
-    predicted_window: str
+    evidence_refs: Optional[str] = None
+    trigger_threshold: Optional[str] = None
+    predicted_window: Optional[str] = None
     confidence: float
     status: str
-    deduplication_key: str
-    recommended_action: str
+    recommended_action: Optional[str] = None
+    created_at: Optional[str] = None
+    affected_entity_type: Optional[str] = None
+    affected_entity_id: Optional[str] = None
+    deduplication_key: Optional[str] = None
 
 class BuildingClusterResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -49,13 +51,20 @@ class RoomAtRiskResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     room_id: str
-    room_number: str
-    building_name: str
-    room_status: str
-    daily_readiness_status: str
+    room_code: Optional[str] = None
+    room_name: Optional[str] = None
+    room_number: Optional[str] = None
+    building_name: Optional[str] = None
+    maintenance_status: Optional[str] = None
+    room_status: Optional[str] = None
+    daily_readiness_status: Optional[str] = None
+    open_work_orders_count: Optional[int] = None
+    has_blocked_parts: Optional[bool] = None
+    upcoming_bookings_count: Optional[int] = None
+    has_scheduled_exam: Optional[bool] = None
+    risk_level: Optional[str] = None
     active_incidents_count: Optional[int] = None
     pending_work_orders_count: Optional[int] = None
-    upcoming_bookings_count: Optional[int] = None
     next_booking_time: Optional[str] = None
     risk_severity: Optional[str] = None
     recommended_action: Optional[str] = None
@@ -64,15 +73,21 @@ class AffectedExaminationResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     booking_id: str
-    booking_code: str
-    title: str
+    exam_title: Optional[str] = None
+    title: Optional[str] = None
+    booking_code: Optional[str] = None
     room_id: str
-    room_number: str
-    building_name: str
-    start_time: str
+    room_code: Optional[str] = None
+    room_number: Optional[str] = None
+    building_name: Optional[str] = None
+    start_time: Optional[str] = None
     hours_until_exam: Optional[float] = None
+    room_condition: Optional[str] = None
+    incident_title: Optional[str] = None
+    severity: Optional[str] = None
     critical_threat: Optional[str] = None
     threat_details: Optional[str] = None
+    recommended_action: Optional[str] = None
     recommended_contingency: Optional[str] = None
 
 class DecisionExplanationResponse(BaseModel):

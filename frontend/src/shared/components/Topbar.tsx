@@ -105,7 +105,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
               style={{ backgroundColor: currentRoleAccent.color }}
             />
             <span className="text-xs font-bold text-[#345873] uppercase tracking-wider">
-              {user?.role} {user?.sub_role ? `(${user.sub_role.replace(/_/g, ' ')})` : ''}
+              {user?.role} {user?.sub_role ? `(${String(user.sub_role).replace(/_/g, ' ')})` : ''}
             </span>
           </div>
 
@@ -131,7 +131,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
               <p className="text-xs font-bold text-[#345873] leading-tight">{user?.name}</p>
               <p className="text-[10px] text-gray-500 capitalize tracking-wide flex items-center">
                 <Shield size={10} className="mr-0.5" />
-                {user?.sub_role ? user.sub_role.replace(/_/g, ' ') : user?.role}
+                {user?.sub_role ? String(user.sub_role).replace(/_/g, ' ') : user?.role}
               </p>
             </div>
             <button

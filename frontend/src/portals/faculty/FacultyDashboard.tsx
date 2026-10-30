@@ -130,7 +130,7 @@ export const FacultyDashboard: React.FC = () => {
       header: 'Purpose',
       accessor: 'purpose' as const,
       render: (r: any) => {
-        const p = r.purpose.replace(/_/g, ' ');
+        const p = (r.purpose ? String(r.purpose) : 'General').replace(/_/g, ' ');
         const isExam = r.purpose === 'examination';
         return (
           <span

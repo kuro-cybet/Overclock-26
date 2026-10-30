@@ -343,13 +343,13 @@ export const AdminDashboard: React.FC = () => {
               >
                 <div>
                   <span className="font-bold text-gray-800 capitalize">
-                    {app.approval_type.replace(/_/g, ' ')}
+                    {(app.approval_type ? String(app.approval_type) : 'Approval').replace(/_/g, ' ')}
                   </span>
                   <p className="text-gray-500 text-[11px] mt-0.5">{app.justification}</p>
                 </div>
                 <div className="text-right">
                   <span className="font-mono font-bold text-[#345873] text-sm block">
-                    ${app.cost_amount.toFixed(2)}
+                    ${Number(app.cost_amount || 0).toFixed(2)}
                   </span>
                   <span className="text-[10px] text-amber-700 font-bold uppercase">Pending Decision</span>
                 </div>
