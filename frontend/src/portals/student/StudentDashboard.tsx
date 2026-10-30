@@ -27,15 +27,15 @@ export const StudentDashboard: React.FC = () => {
     loadDashboard();
   }, []);
 
-  const loadDashboard = async () => {
-    setLoading(true);
+  const loadDashboard = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await api.getDashboard('student');
       setData(res);
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -206,7 +206,7 @@ export const StudentDashboard: React.FC = () => {
       <QuickReportModal
         isOpen={reportModalOpen}
         onClose={() => setReportModalOpen(false)}
-        onSubmitted={() => loadDashboard()}
+        onSubmitted={() => loadDashboard(true)}
       />
     </div>
   );

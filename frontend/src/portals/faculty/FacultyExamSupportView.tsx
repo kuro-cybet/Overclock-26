@@ -41,8 +41,8 @@ export const FacultyExamSupportView: React.FC = () => {
     loadExamData();
   }, []);
 
-  const loadExamData = async () => {
-    setLoading(true);
+  const loadExamData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await api.getExaminations();
       setExamBookings(data || []);
@@ -52,7 +52,7 @@ export const FacultyExamSupportView: React.FC = () => {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -190,7 +190,7 @@ export const FacultyExamSupportView: React.FC = () => {
           </button>
 
           <button
-            onClick={loadExamData}
+            onClick={() => loadExamData()}
             className="p-2.5 bg-white text-gray-600 rounded-2xl border border-slate-200 hover:bg-gray-50 cursor-pointer"
             title="Refresh Examination Schedules"
           >
@@ -339,7 +339,7 @@ export const FacultyExamSupportView: React.FC = () => {
       <QuickReportModal
         isOpen={reportModalOpen}
         onClose={() => setReportModalOpen(false)}
-        onSubmitted={() => loadExamData()}
+        onSubmitted={() => loadExamData(true)}
       />
     </div>
   );
