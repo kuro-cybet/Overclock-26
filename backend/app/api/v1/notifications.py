@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.notification import Notification, NotificationOutbox
@@ -59,6 +59,14 @@ def mark_notification_read(
     notif = db.query(Notification).filter(Notification.id == notification_id).first()
     if not notif:
         raise EntityNotFoundError("Notification", notification_id)
+
+    # Only the addressee (or the addressee's role broadcast) may mutate it.
+    if notif.recipient_id != current_user.id and notif.recipient_role != current_user.role:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This notification is not addressed to you.",
+        )
+
     notif.read = True
     db.commit()
     db.refresh(notif)

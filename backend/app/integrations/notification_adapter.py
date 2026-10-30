@@ -1,19 +1,25 @@
-from datetime import datetime
 from typing import Dict, Any
 from sqlalchemy.orm import Session
-from app.database.models.notification import NotificationOutbox
+from app.services.notification_service import notification_service
+
 
 class NotificationAdapter:
+    """
+    Thin facade over the outbox worker used by integration callers.
+
+    It delegates to NotificationService so there is a single delivery path;
+    previously it marked every queued email "sent" without actually sending.
+    """
+
     def dispatch_outbox_queue(self, db: Session) -> Dict[str, Any]:
-        queued = db.query(NotificationOutbox).filter(NotificationOutbox.status == "queued").all()
-        dispatched = 0
-        for item in queued:
-            item.attempts += 1
-            item.last_attempt_at = datetime.utcnow()
-            item.status = "sent"
-            dispatched += 1
-        db.flush()
-        return {"processed": dispatched, "status": "all_delivered"}
+        result = notification_service.process_pending_outbox(db=db)
+        return {
+            "processed": result["processed"],
+            "sent": result["sent"],
+            "failed": result["failed"],
+            "delivery_mode": result["delivery_mode"],
+            "status": "processed",
+        }
+
 
 notification_adapter = NotificationAdapter()
-

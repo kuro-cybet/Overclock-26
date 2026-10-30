@@ -11,6 +11,8 @@ class WorkOrderCreate(BaseModel):
     priority: Optional[str] = "P3"
     required_skills: Optional[List[str]] = []
     sla_deadline: Optional[datetime] = None
+    # When true (default) and no technician is supplied, auto-dispatch the best match.
+    auto_assign: bool = True
 
 class WorkOrderUpdate(BaseModel):
     status: Optional[str] = None

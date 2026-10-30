@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../core/auth/ProtectedRoute';
 import { RoleGuard } from '../core/auth/RoleGuard';
+import { useAuth } from '../core/auth/AuthProvider';
 import { PortalLayout } from '../shared/layouts/PortalLayout';
 import { RouteErrorBoundary } from '../shared/components/RouteErrorBoundary';
 import { LoginPage } from './LoginPage';
@@ -35,6 +36,13 @@ import { StudentAdmissionsView } from '../portals/student/StudentAdmissionsView'
 import { StudentTransportHostelView } from '../portals/student/StudentTransportHostelView';
 import { StudentMyLearningView } from '../portals/student/StudentMyLearningView';
 
+/** Everyone lands directly in the only portal their role can use. */
+function HomeRedirect() {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  return <Navigate to={`/${user.role}`} replace />;
+}
+
 export const router = createBrowserRouter([
   {
     path: '/login',
@@ -48,7 +56,7 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/admin" replace />
+        element: <HomeRedirect />
       },
       // Admin Portal Routes
       {
@@ -141,7 +149,7 @@ export const router = createBrowserRouter([
         path: 'technician',
         errorElement: <RouteErrorBoundary />,
         element: (
-          <RoleGuard allowedRoles={['technician', 'admin']}>
+          <RoleGuard allowedRoles={['technician']}>
             <PortalLayout portalName="Technicians Portal — Operational Workspace" />
           </RoleGuard>
         ),
@@ -158,7 +166,7 @@ export const router = createBrowserRouter([
         path: 'faculty',
         errorElement: <RouteErrorBoundary />,
         element: (
-          <RoleGuard allowedRoles={['faculty', 'admin']}>
+          <RoleGuard allowedRoles={['faculty']}>
             <PortalLayout portalName="Faculty Portal — Academic Workspace" />
           </RoleGuard>
         ),
@@ -175,7 +183,7 @@ export const router = createBrowserRouter([
         path: 'student',
         errorElement: <RouteErrorBoundary />,
         element: (
-          <RoleGuard allowedRoles={['student', 'admin']}>
+          <RoleGuard allowedRoles={['student']}>
             <PortalLayout portalName="Students Portal — Student Service Workspace" />
           </RoleGuard>
         ),

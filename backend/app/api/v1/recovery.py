@@ -178,7 +178,8 @@ def verify_recovery_outcome(
     description="Retrieves recovery execution audit records with status, verification outcomes, and timestamp history."
 )
 def list_recovery_executions(
-    limit: int = Query(20, ge=1, le=100, description="Maximum executions to return"),
+    limit: int = 20,
+    current_user: User = Depends(_recovery_guard),
     db: Session = Depends(get_db)
 ):
     """

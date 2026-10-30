@@ -34,23 +34,29 @@ router = APIRouter(prefix="/bookings", tags=["bookings"])
     description="Retrieves scheduled room reservations across campus with multi-parameter filtering."
 )
 def list_bookings(
-    room_id: Optional[str] = Query(None, description="Filter by room UUID"),
-    status: Optional[str] = Query(None, description="Filter by status: `confirmed`, `tentative`, `cancelled`, `completed`"),
-    user_id: Optional[str] = Query(None, description="Filter by booking creator user UUID"),
-    purpose: Optional[str] = Query(None, description="Filter by purpose: `examination`, `lecture`, `lab_session`, `meeting`, `seminar`"),
-    limit: int = Query(100, ge=1, le=500, description="Maximum bookings to return"),
+    room_id: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    user_id: Optional[str] = Query(None),
+    purpose: Optional[str] = Query(None),
+    limit: int = 100,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     List scheduled bookings with timetable and room allocation data.
     """
     q = db.query(RoomBooking)
+
+    # Students and faculty only see their own bookings; staff see the schedule.
+    if current_user.role in ["student", "faculty"]:
+        q = q.filter(RoomBooking.user_id == current_user.id)
+    elif user_id:
+        q = q.filter(RoomBooking.user_id == user_id)
+
     if room_id:
         q = q.filter(RoomBooking.room_id == room_id)
     if status:
         q = q.filter(RoomBooking.status == status)
-    if user_id:
-        q = q.filter(RoomBooking.user_id == user_id)
     if purpose:
         q = q.filter(RoomBooking.purpose == purpose)
     bookings = q.order_by(RoomBooking.start_time.asc()).limit(limit).all()
@@ -63,7 +69,8 @@ def list_bookings(
     description="Retrieves upcoming examination sessions enriched with assigned room operational status, active infrastructure incidents, and daily readiness flags."
 )
 def list_examination_sessions(
-    limit: int = Query(50, ge=1, le=200, description="Maximum examination sessions to return"),
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """

@@ -6,19 +6,18 @@ from app.database.models.approval import ApprovalRequest
 from app.database.models.user import User
 from app.schemas.approval import ApprovalDecisionRequest, ApprovalResponse
 from app.services.approval_service import approval_service
-from app.api.deps import get_current_user
+from app.api.deps import require_role
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
 
-@router.get(
-    "",
-    response_model=List[ApprovalResponse],
-    summary="List Approval Requests",
-    description="Retrieves administrative approval requests (purchase orders, costly repairs, technician reassignments, room overrides)."
-)
+_approval_reader = require_role(["admin"])
+_approval_decider = require_role(["admin"])
+
+@router.get("", response_model=List[ApprovalResponse])
 def list_approvals(
-    status: Optional[str] = Query(None, description="Filter by approval status: `pending`, `approved`, `rejected`"),
-    limit: int = Query(50, ge=1, le=200, description="Maximum approval requests to return"),
+    status: Optional[str] = Query(None),
+    limit: int = 50,
+    current_user: User = Depends(_approval_reader),
     db: Session = Depends(get_db)
 ):
     """
@@ -43,7 +42,7 @@ def list_approvals(
 def decide_approval(
     approval_id: str,
     payload: ApprovalDecisionRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_approval_decider),
     db: Session = Depends(get_db)
 ):
     """

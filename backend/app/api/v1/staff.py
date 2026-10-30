@@ -13,19 +13,17 @@ from app.schemas.staff import (
 )
 from app.services.assignment_service import assignment_service
 from app.core.exceptions import EntityNotFoundError
+from app.api.deps import require_role
 
 router = APIRouter(prefix="/staff", tags=["staff"])
 
-@router.get(
-    "",
-    response_model=List[StaffProfileResponse],
-    summary="List Field Staff and Technicians",
-    description="Retrieves operational staff profiles with shift assignments, current active workloads, and skill sets."
-)
-def list_staff(db: Session = Depends(get_db)):
-    """
-    List all staff profiles with workload and skill metrics.
-    """
+_staff_access = require_role(["admin", "technician"])
+
+@router.get("")
+def list_staff(
+    current_user: User = Depends(_staff_access),
+    db: Session = Depends(get_db)
+):
     profiles = db.query(StaffProfile).all()
     results = []
     for p in profiles:
@@ -58,7 +56,8 @@ def list_staff(db: Session = Depends(get_db)):
 )
 def update_staff_availability(
     user_id: str,
-    payload: StaffStatusUpdateRequest,
+    status: str = Body(..., embed=True),
+    current_user: User = Depends(_staff_access),
     db: Session = Depends(get_db)
 ):
     """
@@ -67,7 +66,7 @@ def update_staff_availability(
     prof = db.query(StaffProfile).filter(StaffProfile.user_id == user_id).first()
     if not prof:
         raise EntityNotFoundError("StaffProfile", user_id)
-    prof.availability_status = payload.status
+    prof.availability_status = status
     db.commit()
     return {"user_id": user_id, "status": prof.availability_status}
 
@@ -78,9 +77,10 @@ def update_staff_availability(
     description="Calculates suitability scores for available technicians based on skill matching, shift alignment, building proximity, and current workload."
 )
 def get_eligible_staff(
-    skills: Optional[str] = Query(None, description="Comma-separated required skills (e.g., `electrical,hvac`)"),
-    building_id: Optional[str] = Query(None, description="Campus building UUID where task is located"),
-    shift: Optional[str] = Query("morning", description="Target work shift: `morning`, `evening`, `night`"),
+    skills: Optional[str] = Query(None),
+    building_id: Optional[str] = Query(None),
+    shift: Optional[str] = Query("morning"),
+    current_user: User = Depends(_staff_access),
     db: Session = Depends(get_db)
 ):
     """

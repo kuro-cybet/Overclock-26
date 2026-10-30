@@ -16,22 +16,22 @@ from app.schemas.incident import (
 from app.services.correlation_service import correlation_service
 from app.services.sla_service import sla_service
 from app.core.exceptions import EntityNotFoundError
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_admin_sub_role
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 
-@router.get(
-    "",
-    response_model=List[IncidentResponse],
-    summary="List Campus Incidents",
-    description="Retrieves operational incidents across university buildings with multi-parameter filtering."
+_incident_editor = require_admin_sub_role(
+    ["system_admin", "facilities_admin", "department_manager"]
 )
+
+@router.get("", response_model=List[IncidentResponse])
 def list_incidents(
-    status: Optional[str] = Query(None, description="Filter by lifecycle status: `open`, `in_progress`, `pending_parts`, `resolved`, `closed`"),
-    severity: Optional[str] = Query(None, description="Filter by severity level: `low`, `medium`, `high`, `critical`"),
-    category: Optional[str] = Query(None, description="Filter by operational category: `electrical`, `hvac`, `plumbing`, `network`, `av_equipment`, etc."),
-    building_id: Optional[str] = Query(None, description="Filter by campus building UUID"),
-    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    status: Optional[str] = Query(None),
+    severity: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    building_id: Optional[str] = Query(None),
+    limit: int = 100,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -61,6 +61,7 @@ def list_incidents(
 )
 def get_incident(
     incident_id: str,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -82,6 +83,7 @@ def get_incident(
 )
 def get_incident_details(
     incident_id: str,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -111,7 +113,7 @@ def get_incident_details(
 )
 def create_incident(
     payload: IncidentCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_incident_editor),
     db: Session = Depends(get_db)
 ):
     """
@@ -153,7 +155,7 @@ def create_incident(
 )
 def correlate_reports(
     payload: IncidentCorrelateRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_incident_editor),
     db: Session = Depends(get_db)
 ):
     """

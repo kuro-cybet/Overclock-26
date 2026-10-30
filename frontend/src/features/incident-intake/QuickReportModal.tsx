@@ -68,7 +68,9 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
         room_id: defaultRoomId,
       });
       setSubmittedReport(res);
-      if (onSubmitted) onSubmitted();
+      // Deliberately do NOT call onSubmitted here. Parents typically refetch and
+      // briefly unmount this modal, which would throw away the success screen and
+      // remount an empty form. The refresh runs when the user dismisses the result.
     } catch (err: any) {
       alert(`Submission error: ${err.message}`);
     } finally {
@@ -77,10 +79,14 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
   };
 
   const handleResetAndClose = () => {
+    const wasSubmitted = !!submittedReport;
     setTitle('');
     setDescription('');
+    setCategory('network');
+    setUrgency('medium');
     setSubmittedReport(null);
     onClose();
+    if (wasSubmitted && onSubmitted) onSubmitted();
   };
 
   if (!isOpen) return null;

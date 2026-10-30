@@ -4,7 +4,13 @@ from app.main import app
 client = TestClient(app)
 
 def test_list_incidents():
-    res = client.get("/api/v1/incidents?limit=10")
+    login_res = client.post("/api/v1/auth/login", json={
+        "email": "student@campusops.edu",
+        "password": "password123"
+    })
+    headers = {"Authorization": f"Bearer {login_res.json()['access_token']}"}
+
+    res = client.get("/api/v1/incidents?limit=10", headers=headers)
     assert res.status_code == 200
     data = res.json()
     assert len(data) > 0

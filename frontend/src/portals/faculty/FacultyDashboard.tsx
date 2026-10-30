@@ -45,8 +45,8 @@ export const FacultyDashboard: React.FC = () => {
     loadDashboard();
   }, []);
 
-  const loadDashboard = async () => {
-    setLoading(true);
+  const loadDashboard = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [dashData, roomsData] = await Promise.all([
         api.getDashboard('faculty'),
@@ -60,7 +60,7 @@ export const FacultyDashboard: React.FC = () => {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -313,7 +313,7 @@ export const FacultyDashboard: React.FC = () => {
       <QuickReportModal
         isOpen={reportModalOpen}
         onClose={() => setReportModalOpen(false)}
-        onSubmitted={() => loadDashboard()}
+        onSubmitted={() => loadDashboard(true)}
       />
 
       {/* Booking Modal */}

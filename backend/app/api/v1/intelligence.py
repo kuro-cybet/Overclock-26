@@ -8,28 +8,21 @@ from app.services.intelligence_service import (
     predictive_alerts_service
 )
 from app.services.operational_intelligence_service import operational_intelligence_service
-from app.schemas.intelligence import (
-    HistoricalCaseResponse,
-    PredictiveAlertResponse,
-    BuildingClusterResponse,
-    RoomAtRiskResponse,
-    AffectedExaminationResponse,
-    DecisionExplanationResponse,
-    OperationalAssessmentResponse
-)
+from app.database.models.user import User
+from app.api.deps import require_role
+from app.schemas.intelligence import DecisionExplanationResponse
 
 router = APIRouter(prefix="/intelligence", tags=["intelligence"])
 
-@router.get(
-    "/historical-cases",
-    response_model=List[HistoricalCaseResponse],
-    summary="Retrieve Similar Historical Cases",
-    description="Retrieves verified similar past cases with diagnosis, parts used, root cause analysis, and verified outcome."
-)
+_intel_admin = require_role(["admin"])
+_intel_tech = require_role(["admin", "technician"])
+
+@router.get("/historical-cases")
 def get_similar_historical_cases(
-    category: str = Query(..., description="Operational fault category: `electrical`, `hvac`, `network`, `plumbing`, etc."),
-    symptoms: str = Query(..., description="Text description of symptoms or error observations"),
-    room_id: Optional[str] = Query(None, description="Optional room UUID for location-specific historical matching"),
+    category: str = Query(...),
+    symptoms: str = Query(...),
+    room_id: Optional[str] = Query(None),
+    current_user: User = Depends(_intel_tech),
     db: Session = Depends(get_db)
 ):
     """
@@ -42,64 +35,46 @@ def get_similar_historical_cases(
         room_id=room_id
     )
 
-@router.get(
-    "/predictive-alerts",
-    response_model=List[PredictiveAlertResponse],
-    summary="Get Predictive Operational Alerts",
-    description="Surfaces evidence-based predictive operational alerts (approaching SLA risks, parts depletion, examination readiness gaps)."
-)
-def get_predictive_alerts(db: Session = Depends(get_db)):
-    """
-    Evaluate multi-factor predictive operational alerts.
-    """
+@router.get("/predictive-alerts")
+def get_predictive_alerts(
+    current_user: User = Depends(_intel_admin),
+    db: Session = Depends(get_db)
+):
+    """Surfaces evidence-based predictive operational alerts (SLA risks, parts depletion, readiness gaps)."""
     return predictive_alerts_service.evaluate_predictive_alerts(db=db)
 
-@router.get(
-    "/operational-assessment",
-    response_model=OperationalAssessmentResponse,
-    summary="Get Holistic Operational Assessment",
-    description="Holistic operational intelligence assessment across buildings, rooms, examinations, technician workloads, inventory, and SLAs."
-)
-def get_operational_assessment(db: Session = Depends(get_db)):
+@router.get("/operational-assessment")
+def get_operational_assessment(
+    current_user: User = Depends(_intel_admin),
+    db: Session = Depends(get_db)
+):
     """
     Perform full synthesized multi-dimensional campus operational risk assessment.
     """
     return operational_intelligence_service.get_full_operational_assessment(db=db)
 
-@router.get(
-    "/building-clusters",
-    response_model=List[BuildingClusterResponse],
-    summary="Detect Multi-Incident Building Clusters",
-    description="Identifies buildings experiencing concurrent multi-incident clusters that signal potential systemic infrastructure failures."
-)
-def get_building_clusters(db: Session = Depends(get_db)):
-    """
-    Surfaces buildings experiencing multi-incident clusters.
-    """
+@router.get("/building-clusters")
+def get_building_clusters(
+    current_user: User = Depends(_intel_admin),
+    db: Session = Depends(get_db)
+):
+    """Surfaces buildings experiencing multi-incident clusters."""
     return operational_intelligence_service.detect_building_incident_clusters(db=db)
 
-@router.get(
-    "/rooms-at-risk",
-    response_model=List[RoomAtRiskResponse],
-    summary="Detect High-Risk Rooms",
-    description="Surfaces rooms with unresolved maintenance or open work orders that have scheduled immediate academic bookings."
-)
-def get_rooms_at_risk(db: Session = Depends(get_db)):
-    """
-    Surfaces rooms with unresolved maintenance or open work orders with scheduled bookings.
-    """
+@router.get("/rooms-at-risk")
+def get_rooms_at_risk(
+    current_user: User = Depends(_intel_admin),
+    db: Session = Depends(get_db)
+):
+    """Surfaces rooms with unresolved maintenance or open work orders with scheduled bookings."""
     return operational_intelligence_service.detect_rooms_at_risk(db=db)
 
-@router.get(
-    "/affected-examinations",
-    response_model=List[AffectedExaminationResponse],
-    summary="Pinpoint Jeopardized Examination Sessions",
-    description="Pinpoints upcoming examinations compromised by facility, HVAC, or equipment faults, providing contingency recommendations."
-)
-def get_affected_examinations(db: Session = Depends(get_db)):
-    """
-    Pinpoints upcoming examinations compromised by facility or equipment faults.
-    """
+@router.get("/affected-examinations")
+def get_affected_examinations(
+    current_user: User = Depends(_intel_admin),
+    db: Session = Depends(get_db)
+):
+    """Pinpoints upcoming examinations compromised by facility or equipment faults."""
     return operational_intelligence_service.detect_affected_examinations(db=db)
 
 @router.get(
@@ -109,8 +84,9 @@ def get_affected_examinations(db: Session = Depends(get_db)):
     description="Retrieves transparent decision explanation records detailing why specific algorithmic routing or recovery actions were chosen."
 )
 def get_decision_explanations(
-    decision_type: Optional[str] = Query(None, description="Filter by decision type: `technician_assignment`, `recovery_plan`, `priority_scoring`"),
-    limit: int = Query(20, ge=1, le=100, description="Maximum explanation records to return"),
+    decision_type: Optional[str] = None,
+    limit: int = 20,
+    current_user: User = Depends(_intel_admin),
     db: Session = Depends(get_db)
 ):
     """

@@ -101,4 +101,13 @@ def get_report(
     report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
         raise EntityNotFoundError("Report", report_id)
+
+    # Students and faculty may only open their own reports.
+    if current_user.role in ["student", "faculty"] and report.reporter_id != current_user.id:
+        from fastapi import HTTPException, status as http_status
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own reports.",
+        )
+
     return report

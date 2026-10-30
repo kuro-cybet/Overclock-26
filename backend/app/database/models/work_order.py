@@ -13,7 +13,7 @@ class WorkOrder(Base):
     description = Column(Text, nullable=False)
     assigned_technician_id = Column(String(36), nullable=True, index=True)
     priority = Column(String(10), nullable=False, default="P3")  # P1, P2, P3, P4
-    status = Column(String(50), default="assigned", nullable=False)  # assigned, in_progress, blocked, pending_parts, completed, cancelled
+    status = Column(String(50), default="unassigned", nullable=False)  # unassigned, assigned, in_progress, blocked, pending_parts, completed, cancelled
     required_skills = Column(Text, nullable=True)  # JSON list
     sla_deadline = Column(DateTime, nullable=True)
     blocked_reason = Column(String(255), nullable=True)

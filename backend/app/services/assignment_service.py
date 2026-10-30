@@ -3,8 +3,10 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from app.database.models.staff import StaffProfile
 from app.database.models.user import User
+from app.database.models.incident import Incident
 from app.database.models.work_order import WorkOrder
 from app.database.models.explanation import DecisionExplanation
+from app.services import workflow_notifications
 from app.core.exceptions import CampusOpsException
 
 class AssignmentService:
@@ -73,10 +75,15 @@ class AssignmentService:
             raise CampusOpsException(f"Work order '{work_order_id}' not found.", 404)
 
         req_skills = json.loads(wo.required_skills) if wo.required_skills else []
+        incident = db.query(Incident).filter(Incident.id == wo.incident_id).first()
 
         selected_tech_id = technician_id
         if not selected_tech_id:
-            eligible = self.find_eligible_technicians(db, req_skills)
+            eligible = self.find_eligible_technicians(
+                db,
+                req_skills,
+                preferred_building_id=incident.building_id if incident else None,
+            )
             if not eligible:
                 raise CampusOpsException("No qualified technician with matching skills and availability found for assignment.", 422)
             selected_tech_id = eligible[0]["technician_id"]
@@ -124,6 +131,16 @@ class AssignmentService:
         db.add(expl)
 
         db.flush()
+
+        # Notify the technician (in-app + email) and, on reassignment, the reporter.
+        workflow_notifications.work_order_assigned(
+            db,
+            wo,
+            incident,
+            selected_user,
+            is_reassignment=bool(reassign_reason),
+        )
+
         return wo
 
 assignment_service = AssignmentService()

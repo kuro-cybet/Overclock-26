@@ -1,5 +1,5 @@
 from typing import Dict, Any, Literal
-from fastapi import APIRouter, Depends, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.incident import Incident
@@ -10,21 +10,23 @@ from app.database.models.report import Report
 from app.database.models.approval import ApprovalRequest
 from app.database.models.user import User
 from app.services.analytics_service import analytics_service
-from app.api.deps import get_current_user
-from app.schemas.analytics import AnalyticsDashboardResponse, PortalDashboardResponse
+from app.api.deps import get_current_user, require_admin_sub_role
+from app.schemas.analytics import PortalDashboardResponse
 
 router = APIRouter(prefix="", tags=["analytics-and-dashboard"])
 
-@router.get(
-    "/analytics",
-    response_model=AnalyticsDashboardResponse,
-    summary="Get Systemwide Analytics & KPIs",
-    description="Retrieves aggregate campus operational metrics: open incidents, SLA compliance percentage, active work orders, room utilization, and 6-month monthly trends."
+# Cross-portal system analytics is operational data for the admin team.
+_analytics_reader = require_admin_sub_role(
+    ["system_admin", "facilities_admin", "department_manager"]
 )
-def get_analytics(db: Session = Depends(get_db)):
-    """
-    Get systemwide high-level operational analytics and KPIs.
-    """
+
+PORTAL_NAMES = ("admin", "technician", "faculty", "student")
+
+@router.get("/analytics")
+def get_analytics(
+    current_user: User = Depends(_analytics_reader),
+    db: Session = Depends(get_db)
+):
     return analytics_service.get_dashboard_analytics(db)
 
 @router.get(
@@ -41,9 +43,24 @@ def get_portal_dashboard(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Retrieve personalized operational view tailored to the active role portal.
-    """
+    portal = portal.strip().lower()
+    if portal not in PORTAL_NAMES:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown portal '{portal}'. Expected one of: {', '.join(PORTAL_NAMES)}.",
+        )
+
+    # A system_admin may inspect any portal; everyone else only their own.
+    is_system_admin = current_user.role == "admin" and current_user.sub_role == "system_admin"
+    if not is_system_admin and current_user.role != portal:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Your role '{current_user.role}' cannot open the '{portal}' dashboard. "
+                "Portal boundaries are enforced per role."
+            ),
+        )
+
     system_analytics = analytics_service.get_dashboard_analytics(db)
 
     if portal == "admin":

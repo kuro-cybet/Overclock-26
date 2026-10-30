@@ -29,15 +29,15 @@ export const FacultyRequestsView: React.FC = () => {
     loadReports();
   }, []);
 
-  const loadReports = async () => {
-    setLoading(true);
+  const loadReports = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await api.getReports();
       setReports(data);
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -123,7 +123,7 @@ export const FacultyRequestsView: React.FC = () => {
             <span>New Support Request</span>
           </button>
           <button
-            onClick={loadReports}
+            onClick={() => loadReports()}
             className="p-2.5 bg-white text-gray-600 rounded-xl border border-slate-200 hover:bg-gray-50 cursor-pointer"
           >
             <RefreshCw size={16} />
@@ -243,7 +243,7 @@ export const FacultyRequestsView: React.FC = () => {
       <QuickReportModal
         isOpen={reportModalOpen}
         onClose={() => setReportModalOpen(false)}
-        onSubmitted={() => loadReports()}
+        onSubmitted={() => loadReports(true)}
       />
     </div>
   );

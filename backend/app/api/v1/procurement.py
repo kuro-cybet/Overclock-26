@@ -6,25 +6,19 @@ from app.database.connection import get_db
 from app.database.models.approval import ProcurementRequest, ApprovalRequest
 from app.database.models.inventory import InventoryItem
 from app.database.models.user import User
-from app.schemas.inventory import (
-    ProcurementCreateRequest,
-    ProcurementResponse,
-    ProcurementCreateResponse
-)
-from app.api.deps import get_current_user
+from app.schemas.inventory import ProcurementCreateRequest, ProcurementCreateResponse
+from app.api.deps import require_role
 
 router = APIRouter(prefix="/procurement", tags=["procurement"])
 
-@router.get(
-    "",
-    response_model=List[ProcurementResponse],
-    summary="List Procurement Requests",
-    description="Retrieves purchase requests for depleted inventory parts and emergency repair materials."
-)
-def list_procurement_requests(db: Session = Depends(get_db)):
-    """
-    List all staged and approved procurement orders.
-    """
+_procurement_reader = require_role(["admin"])
+_procurement_creator = require_role(["admin", "technician"])
+
+@router.get("")
+def list_procurement_requests(
+    current_user: User = Depends(_procurement_reader),
+    db: Session = Depends(get_db)
+):
     return db.query(ProcurementRequest).order_by(ProcurementRequest.created_at.desc()).all()
 
 @router.post(
@@ -38,7 +32,7 @@ def list_procurement_requests(db: Session = Depends(get_db)):
 )
 def create_procurement_request(
     payload: ProcurementCreateRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_procurement_creator),
     db: Session = Depends(get_db)
 ):
     """

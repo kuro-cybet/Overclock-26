@@ -2,6 +2,7 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from app.config import settings
+from app.database.schema_migrations import run_startup_migrations
 
 db_url = settings.DATABASE_URL
 
@@ -21,6 +22,9 @@ if "sqlite" in db_url:
 else:
     # PostgreSQL / Supabase connection with pre-ping check
     engine = create_engine(db_url, pool_pre_ping=True, pool_size=10, max_overflow=20)
+
+# Repair known drift between the tracked SQLite file and the current models.
+run_startup_migrations(engine)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
