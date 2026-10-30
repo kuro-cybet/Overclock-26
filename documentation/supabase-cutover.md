@@ -63,8 +63,9 @@ notification and audit row attached to its original user. Use
 | `faculty` | `susen469@gmail.com` |
 | `technician` / `maintenance_technician` | `techtroveversion3@gmail.com` |
 
-Until Google sign-in is configured, these accounts sign in with the password
-`password123` and can be changed with `--account-password`.
+Sign-in is Google-only: password login is disabled by default. The account
+password can still be set with `--account-password`, and password login can be
+re-enabled with `PASSWORD_LOGIN_ENABLED=true` if you need a local fallback.
 
 ## 4. Point the backend at Supabase
 
@@ -105,12 +106,11 @@ the client.
 ## 6. Verify
 
 ```powershell
-# Backend health + a real login
+# Backend health
 curl https://campusops-u6yt.onrender.com/health
-curl https://campusops-u6yt.onrender.com/api/v1/auth/login -H "Content-Type: application/json" -d '{\"email\":\"rajesekersudharsan@gmail.com\",\"password\":\"password123\"}'
 
-# The retired seeded account must be rejected
-curl -i https://campusops-u6yt.onrender.com/api/v1/auth/login -H "Content-Type: application/json" -d '{\"email\":\"student@campusops.edu\",\"password\":\"password123\"}'
+# Password sign-in is disabled (expect 403)
+curl -i https://campusops-u6yt.onrender.com/api/v1/auth/login -H "Content-Type: application/json" -d '{\"email\":\"rajesekersudharsan@gmail.com\",\"password\":\"password123\"}'
 
 # The anon key must no longer read tables (expect an error / empty result)
 curl "https://pcmjjphqnjrebauyerdy.supabase.co/rest/v1/users?select=email&limit=1" -H "apikey: <ANON_KEY>"

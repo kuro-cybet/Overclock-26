@@ -50,12 +50,18 @@ def _user_summary(user: User) -> UserSummary:
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     """
-    Authenticate user credentials.
+    Authenticate with a password.
 
-    - **email**: Valid registered campus email address.
-    - **password**: Plaintext password checked against argon2/bcrypt password hash.
-    - Returns signed JWT token with sub-role claims and active session profile.
+    Disabled by default. CampusOps uses ``POST /auth/google`` and the
+    server-side role allowlist; password sign-in only exists as a fallback and
+    must be explicitly enabled with ``PASSWORD_LOGIN_ENABLED=true``.
     """
+    if not settings.PASSWORD_LOGIN_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password sign-in is disabled. Continue with Google.",
+        )
+
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(

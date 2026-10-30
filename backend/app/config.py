@@ -22,6 +22,14 @@ def _usable_env(value: Optional[str]) -> Optional[str]:
         return None
     return value
 
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 class Settings(BaseModel):
     PROJECT_NAME: str = "CampusOps"
     API_V1_STR: str = "/api/v1"
@@ -37,6 +45,11 @@ class Settings(BaseModel):
     # Google OAuth sign-in. The frontend sends the Google Identity Services ID
     # token; the server verifies it against this client ID.
     GOOGLE_CLIENT_ID: Optional[str] = _usable_env(os.getenv("GOOGLE_CLIENT_ID"))
+
+    # Password sign-in is off by default: CampusOps uses "Continue with Google"
+    # and the role allowlist. Tests (and local fallback demos) opt back in with
+    # PASSWORD_LOGIN_ENABLED=true.
+    PASSWORD_LOGIN_ENABLED: bool = _env_flag("PASSWORD_LOGIN_ENABLED", False)
 
     # Supabase Configuration
     SUPABASE_URL: Optional[str] = _usable_env(os.getenv("SUPABASE_URL"))

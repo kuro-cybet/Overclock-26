@@ -32,6 +32,17 @@ def test_google_login_rejects_invalid_credential(monkeypatch):
     assert response.status_code == 401, response.text
 
 
+def test_password_login_is_disabled_by_default(monkeypatch):
+    monkeypatch.setattr(settings, "PASSWORD_LOGIN_ENABLED", False)
+
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@campusops.edu", "password": "password123"},
+    )
+    assert response.status_code == 403, response.text
+    assert "Google" in response.json()["detail"]
+
+
 def _fake_claims(monkeypatch, email: str, verified: bool = True):
     import google.oauth2.id_token as id_token
 
