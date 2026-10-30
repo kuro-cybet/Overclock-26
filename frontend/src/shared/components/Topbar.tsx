@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../core/auth/AuthProvider';
-import { Bell, Search, Shield, Eye, LogOut } from 'lucide-react';
+import { Bell, Search, Shield, Eye } from 'lucide-react';
 import { NotificationPanel } from './NotificationPanel';
 import { tokens } from '../../design-system/tokens';
 
@@ -17,7 +17,7 @@ const PREVIEW_ROLES = [
 ];
 
 export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
-  const { user, previewOf, isSystemAdmin, impersonate, exitPreview, logout } = useAuth();
+  const { user, isSystemAdmin, impersonate, logout } = useAuth();
   const navigate = useNavigate();
   const [notifOpen, setNotifOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -46,11 +46,6 @@ export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
     } finally {
       setSwitching(false);
     }
-  };
-
-  const handleExitPreview = () => {
-    exitPreview();
-    navigate('/admin', { replace: true });
   };
 
   return (
@@ -84,7 +79,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
         <div className="flex items-center space-x-3">
           {/* System administrator: portal preview switcher (only while not previewing) */}
           {isSystemAdmin && (
-            <div className="hidden lg:flex items-center space-x-2 bg-[#EAF3F9] px-3 py-1.5 rounded-xl border border-[#8EB9D8]/60">
+            <div className="hidden md:flex items-center space-x-2 bg-[#EAF3F9] px-3 py-1.5 rounded-xl border border-[#8EB9D8]/60">
               <Eye size={14} className="text-[#345873]" />
               <select
                 value=""
@@ -100,24 +95,6 @@ export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
                   </option>
                 ))}
               </select>
-            </div>
-          )}
-
-          {/* Preview banner with a one-click way back to the admin session */}
-          {previewOf && (
-            <div className="hidden lg:flex items-center space-x-2 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
-              <Eye size={14} className="text-amber-600" />
-              <span className="text-[11px] font-bold text-amber-800">
-                Previewing {user?.role}
-              </span>
-              <button
-                onClick={handleExitPreview}
-                className="flex items-center space-x-1 text-[11px] font-bold text-amber-900 hover:text-amber-700 cursor-pointer"
-                title={`Return to ${previewOf.name}'s admin session`}
-              >
-                <LogOut size={12} />
-                <span>Exit preview</span>
-              </button>
             </div>
           )}
 

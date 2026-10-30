@@ -129,10 +129,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('Exit the current portal preview before switching again.');
     }
 
-    const res = await api.impersonate(role);
-
-    // Keep the real admin session so the preview can be exited at any time.
+    // Persist the real admin session *before* the request so that a refresh while
+    // the impersonation is in flight cannot strand the user inside the preview.
     localStorage.setItem(PREVIEW_KEY, JSON.stringify({ token, user }));
+
+    let res;
+    try {
+      res = await api.impersonate(role);
+    } catch (err) {
+      localStorage.removeItem(PREVIEW_KEY);
+      throw err;
+    }
+
     localStorage.setItem(TOKEN_KEY, res.access_token);
 
     setPreviewOf(user);
