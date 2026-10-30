@@ -13,6 +13,17 @@ from app.database.models.notification import Notification, NotificationOutbox
 from app.database.models.audit import AuditLog
 from app.database.models.intelligence import HistoricalResolution, PredictiveAlert
 
+# V2 Models matching existing database schema
+from app.database.models.technician_skill import Skill, TechnicianSkill, WorkOrderSkillRequirement
+from app.database.models.work_order_checklist import WorkOrderChecklistItem
+from app.database.models.inventory_transaction import InventoryTransaction
+from app.database.models.approval_history import ApprovalHistory
+from app.database.models.operational_event import OperationalEvent
+from app.database.models.recovery import RecoveryExecution, RecoveryAction
+from app.database.models.maintenance import AssetMaintenanceHistory, PreventiveMaintenanceSchedule
+from app.database.models.impact import IncidentImpactRecord
+from app.database.models.explanation import DecisionExplanation
+
 __all__ = [
     "User",
     "Building",
@@ -32,5 +43,19 @@ __all__ = [
     "NotificationOutbox",
     "AuditLog",
     "HistoricalResolution",
-    "PredictiveAlert"
+    "PredictiveAlert",
+    # V2
+    "Skill",
+    "TechnicianSkill",
+    "WorkOrderSkillRequirement",
+    "WorkOrderChecklistItem",
+    "InventoryTransaction",
+    "ApprovalHistory",
+    "OperationalEvent",
+    "RecoveryExecution",
+    "RecoveryAction",
+    "AssetMaintenanceHistory",
+    "PreventiveMaintenanceSchedule",
+    "IncidentImpactRecord",
+    "DecisionExplanation",
 ]

@@ -43,6 +43,8 @@ export const Sidebar: React.FC = () => {
   // Navigation menus customized per role and admin sub-role
   const allAdminLinks: (NavLinkItem & { allowedSubRoles?: string[] })[] = [
     { to: '/admin', label: 'Operations Centre', icon: <LayoutDashboard size={22} /> },
+    { to: '/admin/intelligence', label: 'Operational Intelligence', icon: <Sparkles size={22} />, highlight: true, allowedSubRoles: ['system_admin', 'department_manager', 'facilities_admin'] },
+    { to: '/admin/predictive', label: 'Predictive Maintenance', icon: <Layers size={22} />, allowedSubRoles: ['system_admin', 'facilities_admin'] },
     { to: '/admin/incidents', label: 'Incidents & Triage', icon: <AlertTriangle size={22} />, allowedSubRoles: ['system_admin', 'department_manager', 'facilities_admin'] },
     { to: '/admin/campus', label: 'Campus & Facilities', icon: <Building2 size={22} />, allowedSubRoles: ['system_admin', 'facilities_admin'] },
     { to: '/admin/work-orders', label: 'Work Orders', icon: <Wrench size={22} />, allowedSubRoles: ['system_admin', 'facilities_admin'] },
