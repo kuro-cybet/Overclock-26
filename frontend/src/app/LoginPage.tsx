@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../core/auth/AuthProvider';
 import {
@@ -11,6 +11,16 @@ import {
   Wrench,
 } from 'lucide-react';
 
+declare global {
+  interface Window {
+    google?: any;
+  }
+}
+
+// Rendered only when a client ID is configured; the button itself is Google's
+// official "Continue with Google" widget (text: 'continue_with').
+const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
+
 // Demo credentials for the seeded accounts, one per portal. Clicking a portal
 // card signs straight in with that account instead of typing the credentials.
 const DEMO_PASSWORD = 'password123';
@@ -18,7 +28,7 @@ const DEMO_PASSWORD = 'password123';
 const PORTALS = [
   {
     role: 'admin',
-    email: 'admin@campusops.edu',
+    email: 'rajesekersudharsan@gmail.com',
     icon: <Building2 size={18} />,
     title: 'Operations Admin',
     description: 'Control centre, incidents, approvals and simulations.',
@@ -26,7 +36,7 @@ const PORTALS = [
   },
   {
     role: 'technician',
-    email: 'tech@campusops.edu',
+    email: 'techtroveversion3@gmail.com',
     icon: <Wrench size={18} />,
     title: 'Technician',
     description: 'Assigned tasks, checklists and parts requisitions.',
@@ -34,7 +44,7 @@ const PORTALS = [
   },
   {
     role: 'faculty',
-    email: 'faculty@campusops.edu',
+    email: 'susen469@gmail.com',
     icon: <GraduationCap size={18} />,
     title: 'Faculty',
     description: 'Timetables, room requests and exam readiness.',
@@ -42,7 +52,7 @@ const PORTALS = [
   },
   {
     role: 'student',
-    email: 'student@campusops.edu',
+    email: '192573020.simats@saveetha.com',
     icon: <UserCheck size={18} />,
     title: 'Student',
     description: 'Issue intake, notices and campus services.',
@@ -53,21 +63,92 @@ const PORTALS = [
 type Portal = (typeof PORTALS)[number];
 
 export const LoginPage: React.FC = () => {
-  const { login, user } = useAuth();
+  const { login, loginWithGoogle, user } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState<string | null>(null);
+  const [googleReady, setGoogleReady] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const busy = loading || portalLoading !== null;
+  const googleButtonRef = useRef<HTMLDivElement>(null);
+  const googleCallbackRef = useRef<(response: any) => void>(() => {});
+
+  const busy = loading || portalLoading !== null || googleLoading;
 
   // Already signed in: go straight to the portal tied to this account's role.
   useEffect(() => {
     if (user) navigate(`/${user.role}`, { replace: true });
   }, [user, navigate]);
+
+  // Load Google Identity Services once, only when a client ID is configured.
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+
+    const scriptId = 'google-gsi-client';
+    const handleLoad = () => setGoogleReady(true);
+    const existing = document.getElementById(scriptId) as HTMLScriptElement | null;
+
+    if (existing) {
+      if (window.google?.accounts?.id) handleLoad();
+      else existing.addEventListener('load', handleLoad);
+      return () => existing.removeEventListener('load', handleLoad);
+    }
+
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.addEventListener('load', handleLoad);
+    document.head.appendChild(script);
+    return () => script.removeEventListener('load', handleLoad);
+  }, []);
+
+  const handleGoogleCredential = async (response: { credential?: string }) => {
+    if (!response?.credential) {
+      setError('Google did not return a credential. Please try again.');
+      return;
+    }
+    setGoogleLoading(true);
+    setError(null);
+    try {
+      const signedIn = await loginWithGoogle(response.credential);
+      navigate(`/${signedIn.role}`, { replace: true });
+    } catch (err: any) {
+      setError(err?.message || 'Google sign-in failed. Use your CampusOps password instead.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  // Keep the callback fresh without re-rendering Google's widget.
+  googleCallbackRef.current = handleGoogleCredential;
+
+  useEffect(() => {
+    if (!googleReady || !GOOGLE_CLIENT_ID) return;
+    const google = window.google;
+    if (!google?.accounts?.id || !googleButtonRef.current) return;
+
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: (response: any) => googleCallbackRef.current(response),
+      ux_mode: 'popup',
+      auto_select: false,
+    });
+    google.accounts.id.renderButton(googleButtonRef.current, {
+      type: 'standard',
+      theme: 'outline',
+      size: 'large',
+      shape: 'pill',
+      text: 'continue_with',
+      logo_alignment: 'left',
+      width: 320,
+    });
+  }, [googleReady]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -233,6 +314,36 @@ export const LoginPage: React.FC = () => {
                 {!loading && <ArrowRight size={14} />}
               </button>
             </form>
+
+            {GOOGLE_CLIENT_ID && (
+              <div className="mt-5">
+                <div className="flex items-center space-x-3">
+                  <span className="h-px flex-1 bg-slate-200" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                    or
+                  </span>
+                  <span className="h-px flex-1 bg-slate-200" />
+                </div>
+
+                <div className="mt-4 flex justify-center">
+                  <div
+                    ref={googleButtonRef}
+                    aria-label="Continue with Google"
+                    className={googleLoading ? 'opacity-50 pointer-events-none' : ''}
+                  />
+                </div>
+
+                {googleLoading && (
+                  <p className="mt-2 text-center text-[11px] font-bold text-gray-500">
+                    Signing in with Google…
+                  </p>
+                )}
+
+                <p className="mt-2 text-center text-[10px] text-gray-400">
+                  Only Google accounts assigned a CampusOps role can sign in.
+                </p>
+              </div>
+            )}
 
             <p className="mt-5 text-[11px] text-gray-400 flex items-start space-x-1.5">
               <ShieldCheck size={13} className="mt-0.5 shrink-0" />

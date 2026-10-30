@@ -34,6 +34,10 @@ class Settings(BaseModel):
     # Used to build deep links inside notification emails.
     APP_PUBLIC_URL: str = os.getenv("APP_PUBLIC_URL", "http://localhost:5173")
 
+    # Google OAuth sign-in. The frontend sends the Google Identity Services ID
+    # token; the server verifies it against this client ID.
+    GOOGLE_CLIENT_ID: Optional[str] = _usable_env(os.getenv("GOOGLE_CLIENT_ID"))
+
     # Supabase Configuration
     SUPABASE_URL: Optional[str] = _usable_env(os.getenv("SUPABASE_URL"))
     SUPABASE_KEY: Optional[str] = _usable_env(os.getenv("SUPABASE_KEY"))  # Anon key

@@ -28,7 +28,7 @@ def list_staff(
     results = []
     for p in profiles:
         user = db.query(User).filter(User.id == p.user_id).first()
-        if user:
+        if user and user.is_active:
             skills = json.loads(p.skills) if p.skills else []
             results.append({
                 "profile_id": p.id,
