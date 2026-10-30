@@ -8,7 +8,7 @@ from app.database.models.campus import Building, Floor
 from app.database.models.user import User
 from app.schemas.room import RoomResponse, RoomReadinessUpdate
 from app.core.exceptions import EntityNotFoundError
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_role
 
 router = APIRouter(prefix="/rooms", tags=["rooms"])
 
@@ -18,6 +18,7 @@ def list_rooms(
     status: Optional[str] = Query(None),
     readiness: Optional[str] = Query(None),
     limit: int = 100,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     q = db.query(Room)
@@ -30,7 +31,10 @@ def list_rooms(
     return q.limit(limit).all()
 
 @router.get("/buildings")
-def list_buildings(db: Session = Depends(get_db)):
+def list_buildings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     buildings = db.query(Building).all()
     floors = db.query(Floor).all()
     res = []
@@ -47,7 +51,11 @@ def list_buildings(db: Session = Depends(get_db)):
     return res
 
 @router.get("/{room_id}", response_model=RoomResponse)
-def get_room(room_id: str, db: Session = Depends(get_db)):
+def get_room(
+    room_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     room = db.query(Room).filter(Room.id == room_id).first()
     if not room:
         raise EntityNotFoundError("Room", room_id)
@@ -57,7 +65,7 @@ def get_room(room_id: str, db: Session = Depends(get_db)):
 def update_room_readiness(
     room_id: str,
     payload: RoomReadinessUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(["admin", "technician"])),
     db: Session = Depends(get_db)
 ):
     room = db.query(Room).filter(Room.id == room_id).first()

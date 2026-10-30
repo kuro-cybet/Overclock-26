@@ -1,21 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../core/api/client';
+import { useAuth } from '../../core/auth/AuthProvider';
 import { DataTable } from '../../shared/components/DataTable';
 import { StatusBadge } from '../../shared/components/StatusBadge';
-import { Building2, Layers, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
 export const CampusView: React.FC = () => {
+  const { user } = useAuth();
+  // Only operations staff may change readiness; everyone else views the status.
+  const canUpdateReadiness = user?.role === 'admin' || user?.role === 'technician';
+
   const [rooms, setRooms] = useState<any[]>([]);
   const [buildings, setBuildings] = useState<any[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<string>('');
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadData();
   }, [selectedBuilding]);
 
   const loadData = async () => {
-    setLoading(true);
     try {
       const [roomsData, bldData] = await Promise.all([
         api.getRooms(selectedBuilding ? `building_id=${selectedBuilding}` : ''),
@@ -25,8 +28,6 @@ export const CampusView: React.FC = () => {
       setBuildings(bldData);
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -72,15 +73,17 @@ export const CampusView: React.FC = () => {
         <div className="flex flex-col space-y-1">
           <div className="flex items-center space-x-2">
             <StatusBadge status={r.daily_readiness_status} />
-            <select
-              value={r.daily_readiness_status}
-              onChange={(e) => handleUpdateReadiness(r.id, e.target.value)}
-              className="text-[10px] border border-slate-200 rounded px-1.5 py-0.5 bg-white text-gray-700 cursor-pointer"
-            >
-              <option value="confirmed">Confirmed</option>
-              <option value="stale">Stale</option>
-              <option value="unconfirmed">Unconfirmed</option>
-            </select>
+            {canUpdateReadiness && (
+              <select
+                value={r.daily_readiness_status}
+                onChange={(e) => handleUpdateReadiness(r.id, e.target.value)}
+                className="text-[10px] border border-slate-200 rounded px-1.5 py-0.5 bg-white text-gray-700 cursor-pointer"
+              >
+                <option value="confirmed">Confirmed</option>
+                <option value="stale">Stale</option>
+                <option value="unconfirmed">Unconfirmed</option>
+              </select>
+            )}
           </div>
           <span className="text-[10px] text-gray-400">
             Source: {r.freshness_source || 'inspection'} ({r.confirmed_by || 'Unsigned'})

@@ -24,7 +24,7 @@ class NotificationOutbox(Base):
     channel = Column(String(50), default="email", nullable=False)  # email, in_app, webhook
     subject = Column(String(255), nullable=False)
     body = Column(Text, nullable=False)
-    status = Column(String(50), default="queued", nullable=False)  # queued, sent, failed
+    status = Column(String(50), default="queued", nullable=False)  # queued, processing, sent, failed
     attempts = Column(Integer, default=0, nullable=False)
     last_attempt_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

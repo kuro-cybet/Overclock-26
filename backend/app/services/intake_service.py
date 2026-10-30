@@ -8,6 +8,7 @@ from app.database.models.campus import Building
 from app.database.models.room import Room
 from app.database.models.asset import Asset
 from app.services.ai_service import ai_service
+from app.services import workflow_notifications
 from app.core.exceptions import CampusOpsException
 
 class IntakeService:
@@ -109,6 +110,10 @@ class IntakeService:
             existing_incident.correlated_count += 1
             existing_incident.summary = f"Aggregated {existing_incident.correlated_count} reports for {existing_incident.category} issue."
             db.flush()
+
+        # Acknowledge the reporter (in-app + email) and alert the facilities desk
+        # when the report still needs triage.  The caller commits the transaction.
+        workflow_notifications.report_submitted(db, report)
 
         return {
             "report": report,

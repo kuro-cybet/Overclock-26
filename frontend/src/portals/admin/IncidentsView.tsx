@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../../core/api/client';
 import { DataTable } from '../../shared/components/DataTable';
 import { StatusBadge } from '../../shared/components/StatusBadge';
-import { Filter, Layers, CheckSquare, Search, Sparkles, RefreshCw } from 'lucide-react';
+import { Filter, Sparkles, RefreshCw, Plus, Wrench, X } from 'lucide-react';
 
 export const IncidentsView: React.FC = () => {
   const [incidents, setIncidents] = useState<any[]>([]);
@@ -12,20 +12,53 @@ export const IncidentsView: React.FC = () => {
   const [filterSeverity, setFilterSeverity] = useState('');
   const [selectedReportsForCorrelation, setSelectedReportsForCorrelation] = useState<string[]>([]);
   const [correlating, setCorrelating] = useState(false);
+  const [incidentDetails, setIncidentDetails] = useState<any | null>(null);
+  const [staff, setStaff] = useState<any[]>([]);
+
+  // Create work order modal state
+  const [woModalOpen, setWoModalOpen] = useState(false);
+  const [woTitle, setWoTitle] = useState('');
+  const [woDescription, setWoDescription] = useState('');
+  const [woPriority, setWoPriority] = useState('P3');
+  const [assignMode, setAssignMode] = useState<'auto' | 'manual'>('auto');
+  const [woTechId, setWoTechId] = useState('');
+  const [creatingWo, setCreatingWo] = useState(false);
 
   useEffect(() => {
     loadData();
   }, [filterSeverity]);
 
+  useEffect(() => {
+    if (selectedIncident?.id) {
+      loadIncidentDetails(selectedIncident.id);
+    } else {
+      setIncidentDetails(null);
+    }
+  }, [selectedIncident?.id]);
+
+  const loadIncidentDetails = async (id: string) => {
+    try {
+      const details = await api.getIncidentDetails(id);
+      setIncidentDetails(details);
+      return details;
+    } catch (err) {
+      console.error(err);
+      setIncidentDetails(null);
+      return null;
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const [incData, repData] = await Promise.all([
+      const [incData, repData, staffData] = await Promise.all([
         api.getIncidents(filterSeverity ? `severity=${filterSeverity}` : ''),
-        api.getReports('status=submitted')
+        api.getReports('status=submitted'),
+        api.getStaff()
       ]);
       setIncidents(incData);
       setReports(repData);
+      setStaff(staffData);
       if (incData.length > 0 && !selectedIncident) {
         setSelectedIncident(incData[0]);
       }
@@ -40,18 +73,78 @@ export const IncidentsView: React.FC = () => {
     if (selectedReportsForCorrelation.length === 0) return;
     setCorrelating(true);
     try {
-      await api.correlateReports({
+      const incident = await api.correlateReports({
         report_ids: selectedReportsForCorrelation,
         target_incident_id: targetIncidentId,
         new_title: 'Correlated Cluster Outage'
       });
       setSelectedReportsForCorrelation([]);
       await loadData();
-      alert('Reports successfully correlated to incident! All submitters notified.');
+
+      if (incident?.id) {
+        setSelectedIncident(incident);
+        const details = await loadIncidentDetails(incident.id);
+        const workOrder = details?.work_orders?.[0];
+        const technician = workOrder
+          ? staff.find((member) => member.user_id === workOrder.assigned_technician_id)
+          : null;
+
+        if (workOrder) {
+          alert(
+            `Incident ${incident.incident_code} created. Work order ${workOrder.work_order_code} ` +
+            (technician ? `assigned to ${technician.name}.` : 'is waiting for a technician.')
+          );
+        } else {
+          alert(`Incident ${incident.incident_code} created.`);
+        }
+      } else {
+        alert('Reports correlated successfully.');
+      }
     } catch (err: any) {
       alert(`Correlation error: ${err.message}`);
     } finally {
       setCorrelating(false);
+    }
+  };
+
+  const openWorkOrderModal = () => {
+    if (!selectedIncident) return;
+    setWoTitle(`Repair: ${selectedIncident.title}`);
+    setWoDescription(selectedIncident.description || '');
+    setWoPriority(selectedIncident.priority || 'P3');
+    setAssignMode('auto');
+    setWoTechId('');
+    setWoModalOpen(true);
+  };
+
+  const handleCreateWorkOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedIncident) return;
+
+    setCreatingWo(true);
+    try {
+      const workOrder = await api.createWorkOrder({
+        incident_id: selectedIncident.id,
+        title: woTitle,
+        description: woDescription,
+        priority: woPriority,
+        auto_assign: assignMode === 'auto',
+        assigned_technician_id: assignMode === 'manual' ? woTechId : undefined,
+      });
+
+      setWoModalOpen(false);
+      await loadData();
+      await loadIncidentDetails(selectedIncident.id);
+
+      const technician = staff.find((member) => member.user_id === workOrder.assigned_technician_id);
+      alert(
+        `Work order ${workOrder.work_order_code} created` +
+        (technician ? ` and assigned to ${technician.name}.` : ' (unassigned).')
+      );
+    } catch (err: any) {
+      alert(`Could not create work order: ${err.message}`);
+    } finally {
+      setCreatingWo(false);
     }
   };
 
@@ -295,6 +388,50 @@ export const IncidentsView: React.FC = () => {
                     {selectedIncident.correlated_count} individual reports linked
                   </span>
                 </div>
+
+                <div>
+                  <span className="text-gray-400 block font-semibold text-[10px] uppercase tracking-wider">
+                    Work Orders
+                  </span>
+                  {incidentDetails?.work_orders?.length ? (
+                    <div className="space-y-1.5 mt-1">
+                      {incidentDetails.work_orders.map((wo: any) => {
+                        const technician = staff.find((member) => member.user_id === wo.assigned_technician_id);
+                        return (
+                          <div
+                            key={wo.id}
+                            className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
+                          >
+                            <div>
+                              <span className="font-mono font-bold text-[#345873]">
+                                {wo.work_order_code}
+                              </span>
+                              <span className="block text-[10px] text-gray-500">
+                                {technician ? technician.name : 'Awaiting technician'}
+                              </span>
+                            </div>
+                            <StatusBadge status={wo.status} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-gray-400 italic mt-1">
+                      No work order yet.
+                    </p>
+                  )}
+
+                  {!incidentDetails?.work_orders?.length &&
+                    !['resolved', 'closed', 'cancelled'].includes(selectedIncident.status) && (
+                      <button
+                        onClick={openWorkOrderModal}
+                        className="mt-2 w-full flex items-center justify-center space-x-1.5 px-3 py-2 bg-[#345873] text-white rounded-xl text-xs font-bold hover:bg-[#253f54] transition cursor-pointer"
+                      >
+                        <Plus size={13} />
+                        <span>Create Work Order</span>
+                      </button>
+                    )}
+                </div>
               </div>
             </div>
           ) : (
@@ -304,6 +441,132 @@ export const IncidentsView: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Create Work Order Modal */}
+      {woModalOpen && selectedIncident && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#FFF4E9] text-[#F29877] flex items-center justify-center shrink-0">
+                  <Wrench size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-[#345873]">Create Work Order</h3>
+                  <p className="text-xs text-gray-500 font-mono">
+                    {selectedIncident.incident_code} — {selectedIncident.title}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWoModalOpen(false)}
+                className="text-gray-400 hover:text-gray-700 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateWorkOrder} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Work Title</label>
+                <input
+                  type="text"
+                  required
+                  value={woTitle}
+                  onChange={(e) => setWoTitle(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-[#345873] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Description</label>
+                <textarea
+                  rows={3}
+                  required
+                  value={woDescription}
+                  onChange={(e) => setWoDescription(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-[#345873] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Priority</label>
+                <select
+                  value={woPriority}
+                  onChange={(e) => setWoPriority(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-[#345873] focus:outline-none"
+                >
+                  <option value="P1">P1 — Critical (4h SLA)</option>
+                  <option value="P2">P2 — High (12h SLA)</option>
+                  <option value="P3">P3 — Medium (48h SLA)</option>
+                  <option value="P4">P4 — Low (96h SLA)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Dispatch</label>
+                <div className="flex items-center space-x-4 text-xs font-semibold text-gray-700">
+                  <label className="flex items-center space-x-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={assignMode === 'auto'}
+                      onChange={() => setAssignMode('auto')}
+                    />
+                    <span>Auto-assign best technician</span>
+                  </label>
+                  <label className="flex items-center space-x-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={assignMode === 'manual'}
+                      onChange={() => setAssignMode('manual')}
+                    />
+                    <span>Choose technician</span>
+                  </label>
+                </div>
+              </div>
+
+              {assignMode === 'manual' && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Technician</label>
+                  <select
+                    required
+                    value={woTechId}
+                    onChange={(e) => setWoTechId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-[#345873] focus:outline-none"
+                  >
+                    <option value="">Select a technician...</option>
+                    {staff
+                      .filter((member) => !['absent', 'on_leave'].includes(member.availability_status))
+                      .map((member) => (
+                        <option key={member.user_id} value={member.user_id}>
+                          {member.name} ({member.shift}) — load {member.current_workload} — {member.skills.join(', ')}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="pt-3 flex justify-end space-x-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setWoModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-800 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingWo || (assignMode === 'manual' && !woTechId)}
+                  className="px-5 py-2 bg-[#345873] text-white rounded-xl text-xs font-bold hover:bg-[#253f54] transition cursor-pointer disabled:opacity-50"
+                >
+                  {creatingWo ? 'Creating...' : 'Create & Dispatch'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

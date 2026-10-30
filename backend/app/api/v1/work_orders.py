@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.work_order import WorkOrder
 from app.database.models.incident import Incident
+from app.database.models.report import Report
 from app.database.models.inventory import StockReservation, InventoryItem
 from app.database.models.approval import ApprovalRequest, ProcurementRequest
 from app.database.models.notification import Notification
@@ -25,18 +26,36 @@ from app.schemas.work_order import (
 from app.services.assignment_service import assignment_service
 from app.services.inventory_service import inventory_service
 from app.services.event_service import event_service
+from app.services import work_order_service, workflow_notifications
 from app.core.state_machine import validate_transition
 from app.core.exceptions import EntityNotFoundError, CampusOpsException, StockUnavailableError
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_role, require_admin_sub_role
 
 router = APIRouter(prefix="/work-orders", tags=["work-orders"])
+
+# Work orders are operational data: admins manage them, technicians work them.
+_wo_reader = require_role(["admin", "technician"])
+_wo_admin = require_admin_sub_role(["system_admin", "facilities_admin", "department_manager"])
+
+
+def _load_work_order_for(db: Session, work_order_id: str, user: User) -> WorkOrder:
+    """Fetch a work order, enforcing that technicians only see their own tasks."""
+    wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
+    if not wo:
+        raise EntityNotFoundError("WorkOrder", work_order_id)
+    if user.role == "technician" and wo.assigned_technician_id != user.id:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="You can only access work orders assigned to you.",
+        )
+    return wo
 
 @router.get("", response_model=List[WorkOrderResponse])
 def list_work_orders(
     status: Optional[str] = Query(None),
     priority: Optional[str] = Query(None),
     limit: int = 100,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_wo_reader),
     db: Session = Depends(get_db)
 ):
     q = db.query(WorkOrder)
@@ -54,17 +73,20 @@ def list_work_orders(
     return work_orders
 
 @router.get("/{work_order_id}", response_model=WorkOrderResponse)
-def get_work_order(work_order_id: str, db: Session = Depends(get_db)):
-    wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
-    if not wo:
-        raise EntityNotFoundError("WorkOrder", work_order_id)
-    return wo
+def get_work_order(
+    work_order_id: str,
+    current_user: User = Depends(_wo_reader),
+    db: Session = Depends(get_db)
+):
+    return _load_work_order_for(db, work_order_id, current_user)
 
 @router.get("/{work_order_id}/details")
-def get_work_order_details(work_order_id: str, db: Session = Depends(get_db)):
-    wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
-    if not wo:
-        raise EntityNotFoundError("WorkOrder", work_order_id)
+def get_work_order_details(
+    work_order_id: str,
+    current_user: User = Depends(_wo_reader),
+    db: Session = Depends(get_db)
+):
+    wo = _load_work_order_for(db, work_order_id, current_user)
 
     incident = db.query(Incident).filter(Incident.id == wo.incident_id).first()
     reservations = db.query(StockReservation).filter(StockReservation.work_order_id == wo.id).all()
@@ -82,11 +104,10 @@ def get_work_order_details(work_order_id: str, db: Session = Depends(get_db)):
 @router.get("/{work_order_id}/checklist", response_model=List[ChecklistItemResponse])
 def get_work_order_checklist(
     work_order_id: str,
+    current_user: User = Depends(_wo_reader),
     db: Session = Depends(get_db)
 ):
-    wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
-    if not wo:
-        raise EntityNotFoundError("WorkOrder", work_order_id)
+    wo = _load_work_order_for(db, work_order_id, current_user)
 
     items = (
         db.query(WorkOrderChecklistItem)
@@ -123,7 +144,7 @@ def update_checklist_item(
     work_order_id: str,
     item_id: str,
     payload: ChecklistItemUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_wo_reader),
     db: Session = Depends(get_db)
 ):
     item = (
@@ -184,7 +205,7 @@ def update_checklist_item(
 def requisition_parts(
     work_order_id: str,
     payload: PartsRequisitionRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_wo_reader),
     db: Session = Depends(get_db)
 ):
     wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
@@ -291,44 +312,28 @@ def requisition_parts(
 @router.post("", response_model=WorkOrderResponse)
 def create_work_order(
     payload: WorkOrderCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_wo_admin),
     db: Session = Depends(get_db)
 ):
-    wo_count = db.query(WorkOrder).count()
-    wo = WorkOrder(
-        work_order_code=f"WO-{datetime.utcnow().strftime('%Y%m')}-{wo_count + 1:04d}",
-        incident_id=payload.incident_id,
+    incident = db.query(Incident).filter(Incident.id == payload.incident_id).first()
+    if not incident:
+        raise EntityNotFoundError("Incident", payload.incident_id)
+
+    wo, technician = work_order_service.create_work_order_for_incident(
+        db,
+        incident,
         title=payload.title,
         description=payload.description,
+        priority=payload.priority,
         assigned_technician_id=payload.assigned_technician_id,
-        priority=payload.priority or "P3",
-        status="assigned",
-        required_skills=json.dumps(payload.required_skills or []),
+        required_skills=payload.required_skills or None,
         sla_deadline=payload.sla_deadline,
-        checklist=json.dumps([
-            {"task": "Site physical inspection & safety power lock-out", "done": False},
-            {"task": "Hardware diagnostic scan and fault component isolation", "done": False},
-            {"task": "Functional load testing and operational verification signoff", "done": False}
-        ])
+        auto_assign=payload.auto_assign,
+        actor_id=current_user.id,
     )
-    db.add(wo)
-    db.flush()
 
-    # Create persistent WorkOrderChecklistItem rows
-    default_tasks = [
-        "Site physical inspection & safety power lock-out",
-        "Hardware diagnostic scan and fault component isolation",
-        "Functional load testing and operational verification signoff"
-    ]
-    for idx, task in enumerate(default_tasks):
-        ci = WorkOrderChecklistItem(
-            work_order_id=wo.id,
-            task_description=task,
-            step_order=idx + 1,
-            is_completed=False,
-            verification_status="pending"
-        )
-        db.add(ci)
+    # An admin-created work order (outside triage) still updates the reporter.
+    workflow_notifications.work_order_created(db, wo, incident, technician)
 
     db.commit()
     db.refresh(wo)
@@ -338,12 +343,21 @@ def create_work_order(
 def update_work_order(
     work_order_id: str,
     payload: WorkOrderUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_wo_reader),
     db: Session = Depends(get_db)
 ):
-    wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
-    if not wo:
-        raise EntityNotFoundError("WorkOrder", work_order_id)
+    wo = _load_work_order_for(db, work_order_id, current_user)
+
+    # Apply field updates first so resolution emails carry the diagnosis the
+    # technician just submitted.
+    if payload.diagnosis is not None:
+        wo.diagnosis = payload.diagnosis
+    if payload.checklist is not None:
+        wo.checklist = json.dumps(payload.checklist)
+    if payload.evidence_notes is not None:
+        wo.evidence_notes = payload.evidence_notes
+    if payload.blocked_reason is not None:
+        wo.blocked_reason = payload.blocked_reason
 
     # Validate state transition if status changed
     if payload.status and payload.status != wo.status:
@@ -368,23 +382,41 @@ def update_work_order(
                         )
                     )
 
-            wo.completed_at = datetime.utcnow()
+            now = datetime.utcnow()
+            wo.completed_at = now
             # If all work orders for incident are completed, mark incident resolved
             inc = db.query(Incident).filter(Incident.id == wo.incident_id).first()
             if inc:
                 inc.status = "resolved"
-                inc.resolved_at = datetime.utcnow()
+                inc.resolved_at = now
+                db.query(Report).filter(
+                    Report.incident_id == inc.id,
+                    Report.status != "rejected",
+                ).update({"status": "resolved"}, synchronize_session=False)
+
+                technician = (
+                    db.query(User)
+                    .filter(User.id == wo.assigned_technician_id)
+                    .first()
+                    if wo.assigned_technician_id
+                    else None
+                )
+                workflow_notifications.work_order_completed(
+                    db, wo, inc, technician
+                )
+
+        elif payload.status == "in_progress":
+            inc = db.query(Incident).filter(Incident.id == wo.incident_id).first()
+            if inc:
+                if inc.status == "open":
+                    inc.status = "in_progress"
+                db.query(Report).filter(
+                    Report.incident_id == inc.id,
+                    Report.status.in_(["submitted", "triaged", "correlated"]),
+                ).update({"status": "in_progress"}, synchronize_session=False)
+                workflow_notifications.work_in_progress(db, wo, inc)
 
         wo.status = payload.status
-
-    if payload.diagnosis is not None:
-        wo.diagnosis = payload.diagnosis
-    if payload.checklist is not None:
-        wo.checklist = json.dumps(payload.checklist)
-    if payload.evidence_notes is not None:
-        wo.evidence_notes = payload.evidence_notes
-    if payload.blocked_reason is not None:
-        wo.blocked_reason = payload.blocked_reason
 
     db.commit()
     db.refresh(wo)
@@ -394,7 +426,7 @@ def update_work_order(
 def reassign_work_order(
     work_order_id: str,
     payload: WorkOrderReassignRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_wo_admin),
     db: Session = Depends(get_db)
 ):
     # Technicians cannot directly reassign work orders; only request
@@ -418,12 +450,10 @@ def reassign_work_order(
 def request_reassignment(
     work_order_id: str,
     payload: WorkOrderRequestReassignment,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_wo_reader),
     db: Session = Depends(get_db)
 ):
-    wo = db.query(WorkOrder).filter(WorkOrder.id == work_order_id).first()
-    if not wo:
-        raise EntityNotFoundError("WorkOrder", work_order_id)
+    wo = _load_work_order_for(db, work_order_id, current_user)
 
     # Technicians can only request reassignment for orders assigned to them
     if current_user.role == "technician" and wo.assigned_technician_id != current_user.id:

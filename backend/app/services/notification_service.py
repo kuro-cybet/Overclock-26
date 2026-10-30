@@ -1,9 +1,10 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from app.database.models.notification import Notification, NotificationOutbox
 from app.database.models.user import User
+from app.integrations.gmail_sender import EmailDeliveryError, gmail_sender
 
 logger = logging.getLogger(__name__)
 
@@ -114,8 +115,23 @@ class NotificationService:
         - attempt 1: wait >= 10s from last_attempt_at
         - attempt 2: wait >= 30s from last_attempt_at
         - attempt >= 3: mark failed (max retries exceeded)
+
+        Delivery goes through the Gmail edge function when it is configured;
+        otherwise it is simulated so local development and tests keep working.
+
+        Each row is claimed atomically (status "processing") before the network
+        call, so the background worker and a manual trigger cannot both deliver
+        the same email. Rows abandoned by a crash are requeued after 5 minutes.
         """
         now = datetime.utcnow()
+
+        # Recover rows left in "processing" by a crashed worker.
+        db.query(NotificationOutbox).filter(
+            NotificationOutbox.status == "processing",
+            NotificationOutbox.last_attempt_at.isnot(None),
+            NotificationOutbox.last_attempt_at < now - timedelta(minutes=5),
+        ).update({"status": "queued"}, synchronize_session=False)
+
         candidates = (
             db.query(NotificationOutbox)
             .filter(NotificationOutbox.status == "queued")
@@ -131,6 +147,7 @@ class NotificationService:
             # Check maximum attempts
             if item.attempts >= 3:
                 item.status = "failed"
+                db.commit()
                 failed_count += 1
                 continue
 
@@ -142,25 +159,58 @@ class NotificationService:
                     skipped_count += 1
                     continue
 
-            # Process delivery
-            item.attempts += 1
-            item.last_attempt_at = now
+            # Claim the row atomically; only one worker can win this update.
+            claimed = (
+                db.query(NotificationOutbox)
+                .filter(
+                    NotificationOutbox.id == item.id,
+                    NotificationOutbox.status == "queued",
+                )
+                .update(
+                    {
+                        "status": "processing",
+                        "attempts": NotificationOutbox.attempts + 1,
+                        "last_attempt_at": now,
+                    },
+                    synchronize_session=False,
+                )
+            )
+
+            # Commit the claim before the network call so the SQLite write lock
+            # is not held during the Gmail round-trip.
+            db.commit()
+
+            if claimed != 1:
+                skipped_count += 1
+                continue
+
+            db.refresh(item)
+
             try:
-                # Simulated reliable delivery with audit trail
+                gmail_sender.send(
+                    recipient=item.recipient_email,
+                    subject=item.subject,
+                    body=item.body,
+                    entity_code=item.id,
+                )
                 item.status = "sent"
                 sent_count += 1
-            except Exception as e:
+            except EmailDeliveryError as e:
                 logger.error(f"[Outbox] Delivery failed for {item.recipient_email}: {e}")
-                if item.attempts >= 3:
-                    item.status = "failed"
+                item.status = "failed" if item.attempts >= 3 else "queued"
+                failed_count += 1
+            except Exception as e:
+                logger.error(f"[Outbox] Unexpected delivery error for {item.recipient_email}: {e}")
+                item.status = "failed" if item.attempts >= 3 else "queued"
                 failed_count += 1
 
-        db.commit()
+            db.commit()
         return {
             "processed": sent_count + failed_count,
             "sent": sent_count,
             "failed": failed_count,
             "skipped_backoff": skipped_count,
+            "delivery_mode": gmail_sender.mode,
             "timestamp": now.isoformat()
         }
 

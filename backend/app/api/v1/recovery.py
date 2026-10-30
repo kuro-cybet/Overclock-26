@@ -106,6 +106,7 @@ def verify_recovery_outcome(
 @router.get("/executions")
 def list_recovery_executions(
     limit: int = 20,
+    current_user: User = Depends(_recovery_guard),
     db: Session = Depends(get_db)
 ):
     """Lists recovery execution audit records with verification status."""

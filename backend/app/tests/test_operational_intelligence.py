@@ -5,8 +5,17 @@ from app.services.operational_intelligence_service import operational_intelligen
 
 client = TestClient(app)
 
+
+def _admin_headers():
+    token = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@campusops.edu", "password": "password123"},
+    ).json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_operational_assessment_endpoint():
-    res = client.get("/api/v1/intelligence/operational-assessment")
+    res = client.get("/api/v1/intelligence/operational-assessment", headers=_admin_headers())
     assert res.status_code == 200
     data = res.json()
     assert "systemic_readiness_score" in data
@@ -22,13 +31,13 @@ def test_operational_assessment_endpoint():
     assert "repeated_asset_failures" in data["findings"]
 
 def test_building_clusters_endpoint():
-    res = client.get("/api/v1/intelligence/building-clusters")
+    res = client.get("/api/v1/intelligence/building-clusters", headers=_admin_headers())
     assert res.status_code == 200
     data = res.json()
     assert isinstance(data, list)
 
 def test_decision_explanations_endpoint():
-    res = client.get("/api/v1/intelligence/explanations?limit=5")
+    res = client.get("/api/v1/intelligence/explanations?limit=5", headers=_admin_headers())
     assert res.status_code == 200
     data = res.json()
     assert isinstance(data, list)
@@ -47,4 +56,3 @@ def test_service_direct_assessment():
         assert "findings" in assessment
     finally:
         db.close()
-

@@ -46,7 +46,8 @@ export const api = {
   login: (credentials: { email: string; password: string }) =>
     apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
   getMe: () => apiRequest('/auth/me'),
-  getDemoAccounts: () => apiRequest('/users/demo-accounts'),
+  impersonate: (role: string) =>
+    apiRequest('/auth/impersonate', { method: 'POST', body: JSON.stringify({ role }) }),
 
   // Dashboard & Analytics
   getDashboard: (portal: string) => apiRequest(`/dashboard/${portal}`),
@@ -66,6 +67,8 @@ export const api = {
 
   // Work Orders & Staff
   getWorkOrders: (params?: string) => apiRequest(`/work-orders${params ? `?${params}` : ''}`),
+  createWorkOrder: (data: any) =>
+    apiRequest('/work-orders', { method: 'POST', body: JSON.stringify(data) }),
   getWorkOrderDetails: (id: string) => apiRequest(`/work-orders/${id}/details`),
   getWorkOrderChecklist: (woId: string) => apiRequest(`/work-orders/${woId}/checklist`),
   updateChecklistItem: (woId: string, itemId: string, data: { is_completed: boolean; verification_notes?: string }) =>

@@ -8,14 +8,20 @@ from app.services.intelligence_service import (
     predictive_alerts_service
 )
 from app.services.operational_intelligence_service import operational_intelligence_service
+from app.database.models.user import User
+from app.api.deps import require_role
 
 router = APIRouter(prefix="/intelligence", tags=["intelligence"])
+
+_intel_admin = require_role(["admin"])
+_intel_tech = require_role(["admin", "technician"])
 
 @router.get("/historical-cases")
 def get_similar_historical_cases(
     category: str = Query(...),
     symptoms: str = Query(...),
     room_id: Optional[str] = Query(None),
+    current_user: User = Depends(_intel_tech),
     db: Session = Depends(get_db)
 ):
     """Retrieves verified similar past cases with diagnosis, parts used, and verified outcome."""
@@ -27,12 +33,18 @@ def get_similar_historical_cases(
     )
 
 @router.get("/predictive-alerts")
-def get_predictive_alerts(db: Session = Depends(get_db)):
+def get_predictive_alerts(
+    current_user: User = Depends(_intel_admin),
+    db: Session = Depends(get_db)
+):
     """Surfaces evidence-based predictive operational alerts (SLA risks, parts depletion, readiness gaps)."""
     return predictive_alerts_service.evaluate_predictive_alerts(db=db)
 
 @router.get("/operational-assessment")
-def get_operational_assessment(db: Session = Depends(get_db)):
+def get_operational_assessment(
+    current_user: User = Depends(_intel_admin),
+    db: Session = Depends(get_db)
+):
     """
     Holistic operational intelligence assessment across buildings, rooms,
     examinations, technician workloads, inventory, and SLAs.
@@ -40,17 +52,26 @@ def get_operational_assessment(db: Session = Depends(get_db)):
     return operational_intelligence_service.get_full_operational_assessment(db=db)
 
 @router.get("/building-clusters")
-def get_building_clusters(db: Session = Depends(get_db)):
+def get_building_clusters(
+    current_user: User = Depends(_intel_admin),
+    db: Session = Depends(get_db)
+):
     """Surfaces buildings experiencing multi-incident clusters."""
     return operational_intelligence_service.detect_building_incident_clusters(db=db)
 
 @router.get("/rooms-at-risk")
-def get_rooms_at_risk(db: Session = Depends(get_db)):
+def get_rooms_at_risk(
+    current_user: User = Depends(_intel_admin),
+    db: Session = Depends(get_db)
+):
     """Surfaces rooms with unresolved maintenance or open work orders with scheduled bookings."""
     return operational_intelligence_service.detect_rooms_at_risk(db=db)
 
 @router.get("/affected-examinations")
-def get_affected_examinations(db: Session = Depends(get_db)):
+def get_affected_examinations(
+    current_user: User = Depends(_intel_admin),
+    db: Session = Depends(get_db)
+):
     """Pinpoints upcoming examinations compromised by facility or equipment faults."""
     return operational_intelligence_service.detect_affected_examinations(db=db)
 
@@ -58,6 +79,7 @@ def get_affected_examinations(db: Session = Depends(get_db)):
 def get_decision_explanations(
     decision_type: Optional[str] = None,
     limit: int = 20,
+    current_user: User = Depends(_intel_admin),
     db: Session = Depends(get_db)
 ):
     """Retrieves transparent decision explanation records for algorithmic choices."""

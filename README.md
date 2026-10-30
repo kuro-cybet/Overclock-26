@@ -115,6 +115,36 @@ npx vitest run
 
 ---
 
+## 📧 Gmail Notifications (Google OAuth)
+
+CampusOps delivers notification email through the `send-campusops-email` Supabase
+Edge Function, which uses a Google OAuth 2.0 refresh token to call the Gmail API.
+The FastAPI backend signs each queued message with HMAC-SHA256 and posts it to the
+function — Google credentials never live in the backend.
+
+Setup is a one-time, three-step flow:
+
+```cmd
+:: 1. Create an OAuth client (Desktop app) in Google Cloud and enable the Gmail API
+:: 2. Generate the refresh token
+python scripts\google_oauth_setup.py
+
+:: 3. Store GOOGLE_* + CAMPUSOPS_WEBHOOK_SECRET as Supabase secrets, deploy, then
+::    copy the same secret into backend\.env
+supabase functions deploy send-campusops-email --no-verify-jwt
+```
+
+Until credentials are configured, outbox delivery is simulated so local
+development and tests keep working. Set `CAMPUSOPS_ALWAYS_CC` (or reuse
+`CAMPUSOPS_TEST_RECIPIENT`) to CC a demo inbox on every notification while the
+real recipient stays in `To:`. The integration email endpoints are protected: the
+inbox webhook needs a system-admin bearer token or a valid HMAC signature
+(`CAMPUSOPS_INBOUND_SECRET`, falling back to `CAMPUSOPS_WEBHOOK_SECRET`), and the
+outbox listing requires a system admin. Full walkthrough and troubleshooting:
+[`documentation/gmail-oauth-setup.md`](documentation/gmail-oauth-setup.md).
+
+---
+
 ## 📁 Repository Deliverable Structure
 
 ```text

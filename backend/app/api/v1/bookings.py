@@ -32,15 +32,21 @@ def list_bookings(
     user_id: Optional[str] = Query(None),
     purpose: Optional[str] = Query(None),
     limit: int = 100,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     q = db.query(RoomBooking)
+
+    # Students and faculty only see their own bookings; staff see the schedule.
+    if current_user.role in ["student", "faculty"]:
+        q = q.filter(RoomBooking.user_id == current_user.id)
+    elif user_id:
+        q = q.filter(RoomBooking.user_id == user_id)
+
     if room_id:
         q = q.filter(RoomBooking.room_id == room_id)
     if status:
         q = q.filter(RoomBooking.status == status)
-    if user_id:
-        q = q.filter(RoomBooking.user_id == user_id)
     if purpose:
         q = q.filter(RoomBooking.purpose == purpose)
     bookings = q.order_by(RoomBooking.start_time.asc()).limit(limit).all()
@@ -49,6 +55,7 @@ def list_bookings(
 @router.get("/examinations")
 def list_examination_sessions(
     limit: int = 50,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Lists scheduled examinations enriched with room details and current readiness."""

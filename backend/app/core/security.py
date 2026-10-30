@@ -12,7 +12,7 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return hash_password(plain_password) == hashed_password
 
-def create_access_token(subject: str, role: str, sub_role: Optional[str] = None, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(subject: str, role: str, sub_role: Optional[str] = None, expires_delta: Optional[timedelta] = None, impersonated_by: Optional[str] = None) -> str:
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
@@ -25,6 +25,9 @@ def create_access_token(subject: str, role: str, sub_role: Optional[str] = None,
         "exp": expire,
         "iat": datetime.utcnow()
     }
+    if impersonated_by:
+        # Audit trail: this token was issued by a system_admin previewing a portal.
+        payload["act"] = impersonated_by
     encoded_jwt = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 

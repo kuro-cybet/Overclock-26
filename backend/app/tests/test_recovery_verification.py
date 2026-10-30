@@ -59,7 +59,14 @@ def test_recovery_lifecycle_execution_and_verification():
         assert verify_res["is_success"] is True
 
         # 4. Query via API
-        list_res = client.get("/api/v1/recovery/executions?limit=5")
+        login_res = client.post(
+            "/api/v1/auth/login",
+            json={"email": "admin@campusops.edu", "password": "password123"},
+        )
+        assert login_res.status_code == 200
+        admin_headers = {"Authorization": f"Bearer {login_res.json()['access_token']}"}
+
+        list_res = client.get("/api/v1/recovery/executions?limit=5", headers=admin_headers)
         assert list_res.status_code == 200
         executions_list = list_res.json()
         assert any(e["id"] == execution.id for e in executions_list)

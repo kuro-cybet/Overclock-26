@@ -37,6 +37,7 @@ const ALLOWED_EVENTS = [
   "approval_decided",
   "incident_sla_warning",
   "incident_sla_breached",
+  "custom_email",
   "test_email",
 ] as const;
 
@@ -47,6 +48,8 @@ interface EmailPayload {
   entity_code: string;
   recipient_name?: string;
   recipient_email?: string;
+  subject?: string;
+  body?: string;
 }
 
 // ==================================================
@@ -86,6 +89,48 @@ function safeText(
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+/**
+ * Demo catch-all copy recipient.
+ *
+ * Every notification is still addressed to its real recipient, but a copy is
+ * CC'd to this inbox so the demo can show real mail without relying on the
+ * synthetic @campusops.edu addresses.
+ *
+ * Resolution order: CAMPUSOPS_ALWAYS_CC, then CAMPUSOPS_TEST_RECIPIENT.
+ * Returns null when unset/invalid or when it is the primary recipient.
+ */
+function resolveCopyRecipient(recipient: string): string | null {
+  const configured = (
+    Deno.env.get("CAMPUSOPS_ALWAYS_CC") ??
+    Deno.env.get("CAMPUSOPS_TEST_RECIPIENT") ??
+    ""
+  ).trim();
+
+  if (!configured || !isValidEmail(configured)) {
+    return null;
+  }
+
+  if (configured.toLowerCase() === recipient.toLowerCase()) {
+    return null;
+  }
+
+  return configured;
+}
+
+function safeMultilineText(
+  value: unknown,
+  maxLength = 20_000,
+): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value
+    .replace(/\r\n?/g, "\n")
+    .trim()
+    .slice(0, maxLength);
 }
 
 function isAllowedEvent(value: unknown): value is EventType {
@@ -287,6 +332,13 @@ function createEmail(
         "An incident has exceeded its configured SLA deadline. Please take the required action.",
     },
 
+    custom_email: {
+      // Replaced by the caller-supplied subject/body in the request handler.
+      subject: `CampusOps notification - ${entityCode}`,
+      body:
+        "You have a new CampusOps notification.",
+    },
+
     test_email: {
       subject: "CampusOps Gmail integration test",
       body:
@@ -398,17 +450,29 @@ async function sendGmail(
   // Obtain access token exactly once.
   const accessToken = await getGoogleAccessToken();
 
+  // Keep the real recipient in To: and CC the configured demo inbox.
+  const copyRecipient = resolveCopyRecipient(recipient);
+
   // Construct RFC 2822 MIME email.
-  const mimeMessage = [
+  const mimeHeaders = [
     `From: CampusOps <${sender}>`,
     `To: ${recipient}`,
+  ];
+
+  if (copyRecipient) {
+    mimeHeaders.push(`Cc: ${copyRecipient}`);
+  }
+
+  mimeHeaders.push(
     `Subject: =?UTF-8?B?${base64Utf8(subject)}?=`,
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=UTF-8",
     "Content-Transfer-Encoding: base64",
     "",
     wrapBase64(base64Utf8(body)),
-  ].join("\r\n");
+  );
+
+  const mimeMessage = mimeHeaders.join("\r\n");
 
   const encodedMessage = base64Url(mimeMessage);
 
@@ -466,6 +530,7 @@ async function sendGmail(
     JSON.stringify({
       message_id: result.id ?? null,
       thread_id: result.threadId ?? null,
+      cc: copyRecipient,
     }),
   );
 
@@ -631,6 +696,25 @@ Deno.serve(async (req: Request): Promise<Response> => {
       recipientName,
       entityCode,
     );
+
+    // The backend outbox sends the exact subject/body it queued.
+    if (eventType === "custom_email") {
+      const customSubject = safeText(payload.subject);
+      const customBody = safeMultilineText(payload.body);
+
+      if (!customSubject || !customBody) {
+        return jsonResponse(
+          {
+            error:
+              "custom_email requires a subject and body.",
+          },
+          400,
+        );
+      }
+
+      email.subject = customSubject;
+      email.body = customBody;
+    }
 
     // ----------------------------------------------
     // 10.6 SEND EMAIL

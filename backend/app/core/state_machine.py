@@ -23,6 +23,7 @@ INCIDENT_TRANSITIONS: Dict[str, Set[str]] = {
 }
 
 WORK_ORDER_TRANSITIONS: Dict[str, Set[str]] = {
+    "unassigned": {"assigned", "in_progress", "blocked", "cancelled"},
     "assigned": {"in_progress", "blocked", "cancelled"},
     "in_progress": {"pending_parts", "blocked", "completed"},
     "pending_parts": {"in_progress", "blocked"},

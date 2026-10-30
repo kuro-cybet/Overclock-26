@@ -4,10 +4,8 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from app.database.models.report import Report
 from app.database.models.incident import Incident
-from app.database.models.work_order import WorkOrder
-from app.services.ai_service import ai_service
-from app.services.notification_service import notification_service
 from app.database.models.audit import AuditLog
+from app.services import work_order_service, workflow_notifications
 
 class CorrelationService:
     def correlate_reports_to_incident(
@@ -60,16 +58,26 @@ class CorrelationService:
         for r in reports:
             r.incident_id = incident.id
             r.status = "correlated"
-            
-            # Send targeted notification to each reporter that their report is linked to canonical incident
-            notification_service.create_in_app_notification(
-                db=db,
-                recipient_id=r.reporter_id,
-                recipient_role=r.reporter_role,
-                title="Report Status Update",
-                message=f"Your report '{r.report_code}' has been correlated with active incident {incident.incident_code} ({incident.title}). Technicians have been alerted.",
-                notif_type="info",
-                link_url=f"/student/requests" if r.reporter_role == "student" else f"/faculty/requests"
+
+        db.flush()
+
+        # Create the work order as part of triage and auto-dispatch the best
+        # technician.  Dispatch failure is non-fatal: the order stays unassigned
+        # and the facilities desk is alerted.
+        work_order, technician = work_order_service.ensure_work_order_for_incident(
+            db,
+            incident,
+            actor_id=actor_id,
+        )
+
+        # Tell every reporter which incident (and technician) now owns their issue.
+        for r in reports:
+            workflow_notifications.report_triaged(
+                db,
+                r,
+                incident,
+                work_order=work_order,
+                technician=technician,
             )
 
         # Audit event

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../core/auth/AuthProvider';
-import { Bell, Search, UserCheck, Shield, RefreshCw } from 'lucide-react';
+import { Bell, Search, Shield, Eye, LogOut } from 'lucide-react';
 import { NotificationPanel } from './NotificationPanel';
 import { tokens } from '../../design-system/tokens';
 
@@ -9,10 +10,18 @@ interface TopbarProps {
   portalName: string;
 }
 
+const PREVIEW_ROLES = [
+  { value: 'technician', label: 'Technician' },
+  { value: 'faculty', label: 'Faculty' },
+  { value: 'student', label: 'Student' },
+];
+
 export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
-  const { user, switchRole, logout } = useAuth();
+  const { user, previewOf, isSystemAdmin, impersonate, exitPreview, logout } = useAuth();
+  const navigate = useNavigate();
   const [notifOpen, setNotifOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [switching, setSwitching] = useState(false);
 
   const currentRoleAccent =
     tokens.roleAccents[user?.role as keyof typeof tokens.roleAccents] ||
@@ -21,6 +30,27 @@ export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
     if (onSearch) onSearch(e.target.value);
+  };
+
+  const handlePortalChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const role = e.target.value;
+    e.target.value = '';
+    if (!role) return;
+
+    setSwitching(true);
+    try {
+      await impersonate(role);
+      navigate(`/${role}`, { replace: true });
+    } catch (err: any) {
+      alert(err?.message || 'Unable to open that portal.');
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  const handleExitPreview = () => {
+    exitPreview();
+    navigate('/admin', { replace: true });
   };
 
   return (
@@ -51,7 +81,46 @@ export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
         </div>
 
         {/* Right: Alerts & User Profile */}
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
+          {/* System administrator: portal preview switcher (only while not previewing) */}
+          {isSystemAdmin && (
+            <div className="hidden lg:flex items-center space-x-2 bg-[#EAF3F9] px-3 py-1.5 rounded-xl border border-[#8EB9D8]/60">
+              <Eye size={14} className="text-[#345873]" />
+              <select
+                value=""
+                onChange={handlePortalChange}
+                disabled={switching}
+                title="Open another portal as that role"
+                className="bg-transparent text-[11px] font-bold text-[#345873] uppercase tracking-wider focus:outline-none cursor-pointer disabled:opacity-50"
+              >
+                <option value="">{switching ? 'Opening…' : 'Switch portal…'}</option>
+                {PREVIEW_ROLES.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Preview banner with a one-click way back to the admin session */}
+          {previewOf && (
+            <div className="hidden lg:flex items-center space-x-2 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
+              <Eye size={14} className="text-amber-600" />
+              <span className="text-[11px] font-bold text-amber-800">
+                Previewing {user?.role}
+              </span>
+              <button
+                onClick={handleExitPreview}
+                className="flex items-center space-x-1 text-[11px] font-bold text-amber-900 hover:text-amber-700 cursor-pointer"
+                title={`Return to ${previewOf.name}'s admin session`}
+              >
+                <LogOut size={12} />
+                <span>Exit preview</span>
+              </button>
+            </div>
+          )}
+
           {/* Active Persona Badge */}
           <div className="hidden lg:flex items-center space-x-2 bg-[#FFF4E9] px-3.5 py-1.5 rounded-xl border border-peach/50">
             <span
@@ -93,7 +162,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
               className="text-xs text-rose-500 hover:text-rose-700 font-semibold ml-2 cursor-pointer"
               title="Sign out"
             >
-              Exit
+              Sign out
             </button>
           </div>
         </div>
@@ -103,4 +172,3 @@ export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
     </>
   );
 };
-

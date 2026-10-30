@@ -10,9 +10,10 @@ def test_separation_of_duties_self_approval():
         "password": "password123"
     })
     token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
 
     # Facilities admin requests an item
-    inv_res = client.get("/api/v1/inventory?limit=1")
+    inv_res = client.get("/api/v1/inventory?limit=1", headers=headers)
     item_id = inv_res.json()[0]["id"]
 
     proc_res = client.post("/api/v1/procurement", json={

@@ -11,9 +11,13 @@ from app.schemas.incident import IncidentCreate, IncidentCorrelateRequest, Incid
 from app.services.correlation_service import correlation_service
 from app.services.sla_service import sla_service
 from app.core.exceptions import EntityNotFoundError
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_admin_sub_role
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
+
+_incident_editor = require_admin_sub_role(
+    ["system_admin", "facilities_admin", "department_manager"]
+)
 
 @router.get("", response_model=List[IncidentResponse])
 def list_incidents(
@@ -22,6 +26,7 @@ def list_incidents(
     category: Optional[str] = Query(None),
     building_id: Optional[str] = Query(None),
     limit: int = 100,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     q = db.query(Incident)
@@ -40,6 +45,7 @@ def list_incidents(
 @router.get("/{incident_id}", response_model=IncidentResponse)
 def get_incident(
     incident_id: str,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     inc = db.query(Incident).filter(Incident.id == incident_id).first()
@@ -50,6 +56,7 @@ def get_incident(
 @router.get("/{incident_id}/details")
 def get_incident_details(
     incident_id: str,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     inc = db.query(Incident).filter(Incident.id == incident_id).first()
@@ -68,7 +75,7 @@ def get_incident_details(
 @router.post("", response_model=IncidentResponse)
 def create_incident(
     payload: IncidentCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_incident_editor),
     db: Session = Depends(get_db)
 ):
     inc_count = db.query(Incident).count()
@@ -98,7 +105,7 @@ def create_incident(
 @router.post("/correlate", response_model=IncidentResponse)
 def correlate_reports(
     payload: IncidentCorrelateRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(_incident_editor),
     db: Session = Depends(get_db)
 ):
     incident = correlation_service.correlate_reports_to_incident(

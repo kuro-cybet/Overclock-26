@@ -6,11 +6,17 @@ from app.database.connection import get_db
 from app.database.models.staff import StaffProfile
 from app.database.models.user import User
 from app.services.assignment_service import assignment_service
+from app.api.deps import require_role
 
 router = APIRouter(prefix="/staff", tags=["staff"])
 
+_staff_access = require_role(["admin", "technician"])
+
 @router.get("")
-def list_staff(db: Session = Depends(get_db)):
+def list_staff(
+    current_user: User = Depends(_staff_access),
+    db: Session = Depends(get_db)
+):
     profiles = db.query(StaffProfile).all()
     results = []
     for p in profiles:
@@ -36,6 +42,7 @@ def list_staff(db: Session = Depends(get_db)):
 def update_staff_availability(
     user_id: str,
     status: str = Body(..., embed=True),
+    current_user: User = Depends(_staff_access),
     db: Session = Depends(get_db)
 ):
     prof = db.query(StaffProfile).filter(StaffProfile.user_id == user_id).first()
@@ -51,6 +58,7 @@ def get_eligible_staff(
     skills: Optional[str] = Query(None),
     building_id: Optional[str] = Query(None),
     shift: Optional[str] = Query("morning"),
+    current_user: User = Depends(_staff_access),
     db: Session = Depends(get_db)
 ):
     skills_list = [s.strip() for s in skills.split(",")] if skills else []

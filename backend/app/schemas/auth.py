@@ -19,3 +19,13 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserSummary
+    # Set when a system_admin is previewing another role's portal.
+    impersonated_by: Optional[str] = None
+    impersonated_by_name: Optional[str] = None
+
+
+class ImpersonateRequest(BaseModel):
+    """A system_admin asks for a scoped token for another portal role."""
+
+    role: Optional[str] = None
+    user_id: Optional[str] = None

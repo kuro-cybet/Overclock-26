@@ -10,8 +10,9 @@ def test_prevent_double_booking():
         "password": "password123"
     })
     token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
 
-    rooms_res = client.get("/api/v1/rooms?status=available&limit=5")
+    rooms_res = client.get("/api/v1/rooms?status=available&limit=5", headers=headers)
     room_id = rooms_res.json()[0]["id"]
 
     start = (datetime.utcnow() + timedelta(days=20)).replace(hour=10, minute=0, second=0, microsecond=0)

@@ -6,8 +6,17 @@ from app.services.predictive_maintenance_service import predictive_maintenance_s
 
 client = TestClient(app)
 
+
+def _admin_headers():
+    token = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@campusops.edu", "password": "password123"},
+    ).json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_predictive_fleet_overview_endpoint():
-    res = client.get("/api/v1/assets/predictive-overview")
+    res = client.get("/api/v1/assets/predictive-overview", headers=_admin_headers())
     assert res.status_code == 200
     data = res.json()
     assert "summary" in data
@@ -18,6 +27,7 @@ def test_predictive_fleet_overview_endpoint():
     assert "upcoming_schedules" in data
 
 def test_single_asset_health_scoring():
+    headers = _admin_headers()
     db = SessionLocal()
     try:
         asset = db.query(Asset).first()
@@ -31,11 +41,10 @@ def test_single_asset_health_scoring():
         assert "recommended_action" in evaluation
         assert "score_breakdown" in evaluation
 
-        res = client.get(f"/api/v1/assets/{asset.id}/predictive-health")
+        res = client.get(f"/api/v1/assets/{asset.id}/predictive-health", headers=headers)
         assert res.status_code == 200
         api_data = res.json()
         assert api_data["asset_id"] == asset.id
         assert api_data["health_score"] == evaluation["health_score"]
     finally:
         db.close()
-
