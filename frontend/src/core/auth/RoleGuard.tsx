@@ -30,7 +30,7 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({ allowedRoles, allowedSubRo
           <p className="text-gray-600 text-sm mb-4">
             Your current sub-role{' '}
             <span className="font-semibold text-[#345873] uppercase tracking-wide px-2 py-0.5 bg-gray-100 rounded">
-              {user?.sub_role ? user.sub_role.replace(/_/g, ' ') : user?.role || 'Guest'}
+              {user?.sub_role ? String(user.sub_role).replace(/_/g, ' ') : user?.role || 'Guest'}
             </span>{' '}
             is not authorized to access this specific module.
           </p>

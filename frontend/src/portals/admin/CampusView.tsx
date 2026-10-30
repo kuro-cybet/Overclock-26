@@ -51,7 +51,7 @@ export const CampusView: React.FC = () => {
       render: (r: any) => (
         <div>
           <span className="font-bold text-gray-800 block text-xs">{r.name}</span>
-          <span className="text-[10px] text-gray-500 capitalize">{r.type.replace('_', ' ')}</span>
+          <span className="text-[10px] text-gray-500 capitalize">{(r.type ? String(r.type) : 'Room').replace(/_/g, ' ')}</span>
         </div>
       )
     },

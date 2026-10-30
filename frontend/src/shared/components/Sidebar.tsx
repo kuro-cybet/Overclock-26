@@ -126,7 +126,7 @@ export const Sidebar: React.FC = () => {
             </span>
           </div>
           <p className="text-sm font-semibold text-slate-200 mt-1 truncate">
-            {user?.sub_role ? user.sub_role.replace(/_/g, ' ') : user?.department || 'University Wide'}
+            {user?.sub_role ? String(user.sub_role).replace(/_/g, ' ') : user?.department || 'University Wide'}
           </p>
           {role === 'admin' && (
             <div className="mt-2 flex items-center">

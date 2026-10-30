@@ -276,7 +276,7 @@ export const OperationalIntelligenceView: React.FC = () => {
                         <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
                           r.risk_level === 'critical' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'
                         }`}>
-                          {r.risk_level.toUpperCase()}
+                          {(r.risk_level ? String(r.risk_level) : 'HIGH').toUpperCase()}
                         </span>
                         {r.has_blocked_parts && (
                           <p className="text-[10px] text-rose-600 font-bold mt-0.5">Parts Blocked</p>
@@ -351,7 +351,7 @@ export const OperationalIntelligenceView: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase bg-[#345873] text-white">
-                      {e.decision_type.replace(/_/g, ' ')}
+                      {(e.decision_type ? String(e.decision_type) : 'Decision').replace(/_/g, ' ')}
                     </span>
                     <span className="font-bold text-xs text-gray-700">{e.entity_type}: {e.entity_id}</span>
                   </div>

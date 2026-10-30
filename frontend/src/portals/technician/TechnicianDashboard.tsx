@@ -462,7 +462,7 @@ export const TechnicianDashboard: React.FC = () => {
               >
                 <p className="font-bold">{partsFeedback.message}</p>
                 <p className="text-[11px] mt-0.5">
-                  Type: <strong>{partsFeedback.type.toUpperCase()}</strong> | Status: {partsFeedback.status}
+                  Type: <strong>{(partsFeedback.type ? String(partsFeedback.type) : 'Parts').toUpperCase()}</strong> | Status: {partsFeedback.status}
                 </p>
               </div>
             )}

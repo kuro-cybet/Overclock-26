@@ -131,7 +131,7 @@ export const FacultyExamSupportView: React.FC = () => {
                 : 'bg-amber-100 text-amber-800'
             }`}
           >
-            {r.daily_readiness_status.replace(/_/g, ' ')}
+            {(r.daily_readiness_status ? String(r.daily_readiness_status) : 'pending').replace(/_/g, ' ')}
           </span>
           {r.has_open_incident && (
             <p className="text-[10px] text-rose-600 font-bold">Open Incident Flag</p>

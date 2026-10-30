@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../core/auth/ProtectedRoute';
 import { RoleGuard } from '../core/auth/RoleGuard';
 import { PortalLayout } from '../shared/layouts/PortalLayout';
+import { RouteErrorBoundary } from '../shared/components/RouteErrorBoundary';
 import { LoginPage } from './LoginPage';
 
 // Admin Pages
@@ -37,11 +38,13 @@ import { StudentMyLearningView } from '../portals/student/StudentMyLearningView'
 export const router = createBrowserRouter([
   {
     path: '/login',
-    element: <LoginPage />
+    element: <LoginPage />,
+    errorElement: <RouteErrorBoundary />
   },
   {
     path: '/',
     element: <ProtectedRoute />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         index: true,
@@ -50,6 +53,7 @@ export const router = createBrowserRouter([
       // Admin Portal Routes
       {
         path: 'admin',
+        errorElement: <RouteErrorBoundary />,
         element: (
           <RoleGuard allowedRoles={['admin']}>
             <PortalLayout portalName="Admin Portal — Operations Control Centre" />
@@ -68,23 +72,16 @@ export const router = createBrowserRouter([
           {
             path: 'predictive',
             element: (
-              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['system_admin', 'facilities_admin']}>
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['system_admin', 'department_manager', 'facilities_admin']}>
                 <PredictiveMaintenanceView />
               </RoleGuard>
             )
           },
-          {
-            path: 'incidents',
-            element: (
-              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['department_manager', 'facilities_admin']}>
-                <IncidentsView />
-              </RoleGuard>
-            )
-          },
+          { path: 'incidents', element: <IncidentsView /> },
           {
             path: 'campus',
             element: (
-              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['facilities_admin']}>
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['system_admin', 'facilities_admin']}>
                 <CampusView />
               </RoleGuard>
             )
@@ -92,7 +89,7 @@ export const router = createBrowserRouter([
           {
             path: 'work-orders',
             element: (
-              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['facilities_admin']}>
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['system_admin', 'department_manager', 'facilities_admin']}>
                 <WorkOrdersView />
               </RoleGuard>
             )
@@ -100,7 +97,7 @@ export const router = createBrowserRouter([
           {
             path: 'inventory',
             element: (
-              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['procurement_approver']}>
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['system_admin', 'facilities_admin', 'procurement_approver']}>
                 <InventoryView />
               </RoleGuard>
             )
@@ -108,7 +105,7 @@ export const router = createBrowserRouter([
           {
             path: 'approvals',
             element: (
-              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['department_manager', 'procurement_approver']}>
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['system_admin', 'department_manager', 'facilities_admin', 'procurement_approver']}>
                 <ApprovalsView />
               </RoleGuard>
             )
@@ -116,15 +113,15 @@ export const router = createBrowserRouter([
           {
             path: 'staff',
             element: (
-              <RoleGuard allowedRoles={['admin']} allowedSubRoles={[]}>
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['system_admin', 'facilities_admin']}>
                 <StaffView />
               </RoleGuard>
             )
           },
           {
-            path: 'simulator',
+            path: 'simulations',
             element: (
-              <RoleGuard allowedRoles={['admin']} allowedSubRoles={[]}>
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['system_admin']}>
                 <ScenarioSimulatorView />
               </RoleGuard>
             )
@@ -142,6 +139,7 @@ export const router = createBrowserRouter([
       // Technician Portal Routes
       {
         path: 'technician',
+        errorElement: <RouteErrorBoundary />,
         element: (
           <RoleGuard allowedRoles={['technician', 'admin']}>
             <PortalLayout portalName="Technicians Portal — Operational Workspace" />
@@ -158,6 +156,7 @@ export const router = createBrowserRouter([
       // Faculty Portal Routes
       {
         path: 'faculty',
+        errorElement: <RouteErrorBoundary />,
         element: (
           <RoleGuard allowedRoles={['faculty', 'admin']}>
             <PortalLayout portalName="Faculty Portal — Academic Workspace" />
@@ -174,6 +173,7 @@ export const router = createBrowserRouter([
       // Student Portal Routes
       {
         path: 'student',
+        errorElement: <RouteErrorBoundary />,
         element: (
           <RoleGuard allowedRoles={['student', 'admin']}>
             <PortalLayout portalName="Students Portal — Student Service Workspace" />
@@ -195,6 +195,7 @@ export const router = createBrowserRouter([
   },
   {
     path: '*',
-    element: <Navigate to="/login" replace />
+    element: <Navigate to="/login" replace />,
+    errorElement: <RouteErrorBoundary />
   }
 ]);
