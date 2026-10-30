@@ -1,4 +1,18 @@
-const API_BASE = '/api/v1';
+// API base resolution:
+// 1. VITE_API_URL when provided (explicit deployment configuration).
+// 2. The deployed backend for the Render-hosted static site (no local proxy there).
+// 3. Relative path so the Vite dev proxy / same-origin server handles it.
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+const isRenderHost =
+  typeof window !== 'undefined' && /\.onrender\.com$/i.test(window.location.hostname);
+
+const API_BASE = (
+  configuredApiUrl && configuredApiUrl.length > 0
+    ? configuredApiUrl
+    : isRenderHost
+      ? 'https://campusops-u6yt.onrender.com/api/v1'
+      : '/api/v1'
+).replace(/\/+$/, '');
 
 export class ApiError extends Error {
   status: number;
