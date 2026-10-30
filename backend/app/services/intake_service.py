@@ -25,6 +25,7 @@ class IntakeService:
         category: Optional[str] = None,
         urgency: Optional[str] = None,
         source: str = "web_portal",
+        contact_phone: Optional[str] = None,
         reporter_email: Optional[str] = None,
     ) -> Dict[str, Any]:
         # 1. Run AI Extraction
@@ -99,6 +100,7 @@ class IntakeService:
             reporter_id=reporter_id,
             reporter_role=reporter_role,
             source=source,
+            contact_phone=contact_phone,
             status="correlated" if existing_incident else "submitted",
             incident_id=existing_incident.id if existing_incident else None,
             ai_extracted_meta=json.dumps(ai_extraction)

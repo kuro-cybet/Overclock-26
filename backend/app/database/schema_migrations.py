@@ -305,5 +305,8 @@ def run_startup_migrations(engine: Engine) -> None:
         with engine.begin() as conn:
             _repair_users_and_rbac(conn)
             _repair_recovery_schema(conn)
+            rep_cols = _columns(conn, "reports")
+            if rep_cols and "contact_phone" not in rep_cols:
+                conn.exec_driver_sql("ALTER TABLE reports ADD COLUMN contact_phone VARCHAR(30)")
     except Exception:  # pragma: no cover - never block startup on a repair
         logger.exception("[schema] SQLite schema repair failed; continuing startup.")
