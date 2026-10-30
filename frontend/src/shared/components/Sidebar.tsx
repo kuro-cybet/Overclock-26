@@ -16,14 +16,14 @@ import {
   ClipboardList,
   CheckCircle2,
   MessageSquarePlus,
-  HelpCircle,
   Megaphone,
   Layers,
   Sparkles,
   ChevronRight,
   Bus,
   GraduationCap,
-  BookOpen
+  BookOpen,
+  X
 } from 'lucide-react';
 
 interface NavLinkItem {
@@ -33,7 +33,12 @@ interface NavLinkItem {
   highlight?: boolean;
 }
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMobile }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -98,87 +103,129 @@ export const Sidebar: React.FC = () => {
       ? facultyLinks
       : studentLinks;
 
-  return (
-    <aside className="w-72 bg-[#1f2937] text-white flex flex-col justify-between shrink-0 min-h-screen border-r border-gray-800">
-      <div>
-        {/* Brand Header */}
-        <div className="h-20 flex items-center px-6 border-b border-gray-800 cursor-pointer" onClick={() => navigate(`/${role}`)}>
-          <div className="flex items-center space-x-3.5">
-            <div className="w-10 h-10 rounded-xl bg-[#F29877] flex items-center justify-center font-black text-white text-lg shadow-sm">
-              CO
-            </div>
-            <div>
-              <h1 className="font-extrabold text-lg tracking-wider text-white">CAMPUS<span className="text-[#F29877]">OPS</span></h1>
-              <span className="text-xs text-[#8EB9D8] tracking-widest uppercase block font-bold">One Unified Engine</span>
-            </div>
-          </div>
-        </div>
+  const handleLinkClick = () => {
+    if (onCloseMobile) {
+      onCloseMobile();
+    }
+  };
 
-        {/* Active Portal Badge */}
-        <div className="px-6 py-3.5 border-b border-gray-800 bg-black/20">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Active Portal</span>
-            <span
-              className="text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider"
-              style={{ backgroundColor: `${currentAccent.color}30`, color: currentAccent.color }}
+  return (
+    <>
+      {/* Mobile Backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs md:hidden"
+          onClick={onCloseMobile}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar Container: Drawer on mobile (< 768px), static on desktop */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#1f2937] text-white flex flex-col justify-between border-r border-gray-800 transition-transform duration-300 ease-in-out md:static md:translate-x-0 ${
+          mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
+        } shrink-0 min-h-screen overflow-y-auto`}
+      >
+        <div>
+          {/* Brand Header */}
+          <div className="h-20 flex items-center justify-between px-6 border-b border-gray-800">
+            <div
+              className="flex items-center space-x-3.5 cursor-pointer"
+              onClick={() => {
+                navigate(`/${role}`);
+                handleLinkClick();
+              }}
             >
-              {currentAccent.name}
-            </span>
+              <div className="w-10 h-10 rounded-xl bg-[#F29877] flex items-center justify-center font-black text-white text-lg shadow-sm">
+                CO
+              </div>
+              <div>
+                <h1 className="font-extrabold text-lg tracking-wider text-white">
+                  CAMPUS<span className="text-[#F29877]">OPS</span>
+                </h1>
+                <span className="text-xs text-[#8EB9D8] tracking-widest uppercase block font-bold">
+                  One Unified Engine
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onCloseMobile}
+              className="md:hidden p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
+              title="Close Navigation"
+              aria-label="Close Navigation"
+            >
+              <X size={20} />
+            </button>
           </div>
-          <p className="text-sm font-semibold text-slate-200 mt-1 truncate">
-            {user?.sub_role ? String(user.sub_role).replace(/_/g, ' ') : user?.department || 'University Wide'}
-          </p>
-          {role === 'admin' && (
-            <div className="mt-2 flex items-center">
+
+          {/* Active Portal Badge */}
+          <div className="px-6 py-3.5 border-b border-gray-800 bg-black/20">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Active Portal</span>
               <span
-                className={`text-[11px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${
-                  user?.sub_role === 'system_admin'
-                    ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
-                    : 'bg-blue-400/20 text-blue-300 border border-blue-400/30'
-                }`}
+                className="text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider"
+                style={{ backgroundColor: `${currentAccent.color}30`, color: currentAccent.color }}
               >
-                {user?.sub_role === 'system_admin' ? '⚡ Full Authority' : '🔒 Scoped Authority'}
+                {currentAccent.name}
               </span>
             </div>
-          )}
-        </div>
-
-        {/* Navigation Items (Styled to match the requested image with large bold font and right chevrons) */}
-        <nav className="p-4 space-y-2">
-          {links.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.to === `/${role}`}
-              className={({ isActive }) =>
-                `flex items-center justify-between px-4 py-3 rounded-2xl text-base font-bold transition tracking-tight ${
-                  isActive
-                    ? 'bg-[#FFD6BA] text-[#1f2937] shadow-sm'
-                    : 'text-slate-200 hover:bg-white/10 hover:text-white'
-                } ${link.highlight ? 'ring-1 ring-[#F29877]/60' : ''}`
-              }
-            >
-              <div className="flex items-center space-x-3.5 truncate">
-                <span className="shrink-0">{link.icon}</span>
-                <span className="truncate">{link.label}</span>
+            <p className="text-sm font-semibold text-slate-200 mt-1 truncate">
+              {user?.sub_role ? String(user.sub_role).replace(/_/g, ' ') : user?.department || 'University Wide'}
+            </p>
+            {role === 'admin' && (
+              <div className="mt-2 flex items-center">
+                <span
+                  className={`text-[11px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                    user?.sub_role === 'system_admin'
+                      ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
+                      : 'bg-blue-400/20 text-blue-300 border border-blue-400/30'
+                  }`}
+                >
+                  {user?.sub_role === 'system_admin' ? '⚡ Full Authority' : '🔒 Scoped Authority'}
+                </span>
               </div>
-              <ChevronRight size={18} className="opacity-60 shrink-0 ml-2" />
-            </NavLink>
-          ))}
-        </nav>
-      </div>
+            )}
+          </div>
 
-      {/* Footer information */}
-      <div className="p-5 border-t border-gray-800 text-xs text-slate-400 space-y-1.5">
-        <div className="flex items-center justify-between">
-          <span className="font-semibold">Engine Status</span>
-          <span className="flex items-center text-emerald-400 font-bold">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 mr-2 animate-pulse" />
-            Connected
-          </span>
+          {/* Navigation Items */}
+          <nav className="p-4 space-y-2">
+            {links.map((link) => (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                end={link.to === `/${role}`}
+                onClick={handleLinkClick}
+                className={({ isActive }) =>
+                  `flex items-center justify-between px-4 py-3 rounded-2xl text-base font-bold transition tracking-tight min-h-[44px] ${
+                    isActive
+                      ? 'bg-[#FFD6BA] text-[#1f2937] shadow-sm'
+                      : 'text-slate-200 hover:bg-white/10 hover:text-white'
+                  } ${link.highlight ? 'ring-1 ring-[#F29877]/60' : ''}`
+                }
+              >
+                <div className="flex items-center space-x-3.5 truncate">
+                  <span className="shrink-0">{link.icon}</span>
+                  <span className="truncate">{link.label}</span>
+                </div>
+                <ChevronRight size={18} className="opacity-60 shrink-0 ml-2" />
+              </NavLink>
+            ))}
+          </nav>
         </div>
-        <p className="text-xs text-slate-500">Database: SQLite (campusops.db)</p>
-      </div>
-    </aside>
+
+        {/* Footer information */}
+        <div className="p-5 border-t border-gray-800 text-xs text-slate-400 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold">Engine Status</span>
+            <span className="flex items-center text-emerald-400 font-bold">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 mr-2 animate-pulse" />
+              Connected
+            </span>
+          </div>
+          <p className="text-xs text-slate-500">Database: SQLite (campusops.db)</p>
+        </div>
+      </aside>
+    </>
   );
 };

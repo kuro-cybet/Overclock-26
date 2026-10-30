@@ -82,41 +82,49 @@ class WhatsAppService:
     def verify_hub_token(self, mode: Optional[str], token: Optional[str]) -> bool:
         """
         Verifies Meta subscription handshake token.
-        Requires mode == 'subscribe' and token to match either the configured WHATSAPP_VERIFY_TOKEN
-        or the standard campusops verify tokens.
+        Requires mode == 'subscribe' and token to strictly match the configured WHATSAPP_VERIFY_TOKEN.
+        Hardcoded verification token fallbacks are forbidden.
         """
         if mode != "subscribe" or not token:
             return False
 
         configured = (self.verify_token or "").strip()
-        valid_tokens = {
-            configured,
-            "campusops_whatsapp_verify_token_2026",
-            "campusops_verify_token_2026"
-        }
-        valid_tokens.discard("")
-        return token.strip() in valid_tokens
+        if not configured:
+            logger.error("[WhatsApp] WHATSAPP_VERIFY_TOKEN is not configured on this server.")
+            return False
+
+        return token.strip() == configured
 
     def verify_signature(self, raw_body: bytes, signature_header: Optional[str]) -> bool:
         """
         Validates the incoming X-Hub-Signature-256 header using SHA-256 HMAC.
-        If WHATSAPP_APP_SECRET is not configured (e.g. local dev), returns True.
+        In production/staging (ENVIRONMENT != 'development'), requests are strictly rejected
+        if WHATSAPP_APP_SECRET is missing or the signature is invalid.
         """
         if not self.app_secret:
+            if settings.ENVIRONMENT != "development":
+                logger.error("[WhatsApp Security] Rejected webhook: WHATSAPP_APP_SECRET is not configured in production.")
+                return False
+            # Allow unsigned requests ONLY in local development testing
+            logger.warning("[WhatsApp Security] Insecure bypass: WHATSAPP_APP_SECRET missing in local development.")
             return True
 
         if not signature_header or not signature_header.startswith("sha256="):
-            logger.warning("[WhatsApp] Missing or malformed X-Hub-Signature-256 header")
+            logger.warning("[WhatsApp Security] Missing or malformed X-Hub-Signature-256 header.")
             return False
 
-        expected_sig = signature_header.split("=")[1]
-        mac = hmac.new(
-            key=self.app_secret.encode("utf-8"),
-            msg=raw_body,
-            digestmod=hashlib.sha256
-        )
-        calculated_sig = mac.hexdigest()
-        return hmac.compare_digest(calculated_sig, expected_sig)
+        try:
+            expected_sig = signature_header.split("=")[1].strip()
+            mac = hmac.new(
+                key=self.app_secret.encode("utf-8"),
+                msg=raw_body,
+                digestmod=hashlib.sha256
+            )
+            calculated_sig = mac.hexdigest()
+            return hmac.compare_digest(calculated_sig, expected_sig)
+        except Exception as e:
+            logger.error(f"[WhatsApp Security] Exception validating webhook signature: {e}")
+            return False
 
     def is_message_duplicate(self, db: Session, message_id: str) -> bool:
         """Checks if Meta message ID has already been recorded in the audit log."""

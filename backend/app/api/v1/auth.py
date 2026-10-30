@@ -113,7 +113,13 @@ def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)):
     try:
         from google.auth.transport import requests as google_requests
         from google.oauth2 import id_token
+    except ImportError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google authentication library is not installed on this server.",
+        )
 
+    try:
         claims = id_token.verify_oauth2_token(
             payload.credential,
             google_requests.Request(),
@@ -161,6 +167,12 @@ def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)):
     assignment = assignments[0]
 
     user = db.query(User).filter(User.email == email).first()
+    if user and not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been deactivated. Contact a system administrator."
+        )
+
     if not user:
         user = User(
             email=email,
@@ -170,6 +182,7 @@ def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)):
             name=claims.get("name") or email.split("@")[0],
             role=assignment.ROLE,
             created_at=datetime.utcnow(),
+            is_active=True,
         )
         db.add(user)
         db.flush()

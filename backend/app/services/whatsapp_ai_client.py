@@ -95,6 +95,15 @@ class WhatsAppAIClient:
             logger.warning(f"AI Q&A service unreachable at {self.base_url}: {e}")
 
         # Return fallback answer
+        if context:
+            return {
+                "answer": context,
+                "grounded": True,
+                "source_refs": source_urls or [],
+                "confidence": 0.90,
+                "fallback_required": False
+            }
+
         return {
             "answer": (
                 "Sorry, I couldn't find reliable information about your query.\n\n"
@@ -114,13 +123,17 @@ class WhatsAppAIClient:
         if lower in ["hi", "hello", "hey", "help"]:
             return {"intent": "GREETING", "confidence": 0.95, "description": "Greeting"}
 
-        if any(t in lower for t in ["my tickets", "show tickets", "list tickets"]):
+        if any(t in lower for t in ["my tickets", "show tickets", "list tickets", "my complaints"]):
             return {"intent": "MY_TICKETS", "confidence": 0.92, "description": "List tickets"}
 
-        if re.search(r"(?:cop|inc)-\d+", lower) or any(t in lower for t in ["status of", "check ticket"]):
-            return {"intent": "TICKET_STATUS", "confidence": 0.90, "description": "Ticket status query"}
+        if re.search(r"\b(?:cop|cmp|rpt|inc)-[a-z0-9\-]+", lower) or any(t in lower for t in ["status of", "check ticket", "track", "track complaint", "check complaint"]):
+            return {"intent": "TICKET_STATUS", "confidence": 0.95, "description": "Ticket status query"}
 
-        issue_keys = ["broken", "not working", "leaking", "spark", "flicker", "failed", "outage", "fault", "dirty", "damaged", "no ac", "no wifi"]
+        issue_keys = [
+            "broken", "not working", "leaking", "spark", "flicker", "flickering", "failed", "outage",
+            "fault", "dirty", "damaged", "no ac", "no wifi", "dropping", "packet loss", "blackout",
+            "down", "slow", "disconnect", "issue", "problem", "complaint"
+        ]
         if any(k in lower for k in issue_keys):
             category = "Equipment"
             if any(k in lower for k in ["light", "power", "socket", "switch", "breaker", "spark", "blackout"]):

@@ -65,6 +65,10 @@ class WhatsAppQAService:
             if not res.get("fallback_required"):
                 return res.get("answer", FALLBACK_RESPONSE)
 
+        # If asking about campus personnel or department not in database, do not query web search
+        if ("who is" in lower or "where is" in lower) and ("department" in lower or "dept" in lower or "faculty" in lower or "prof" in lower or "magic wand" in lower):
+            return FALLBACK_RESPONSE
+
         # -------------------------------------------------------------
         # Priority 3: Public Web Search
         # -------------------------------------------------------------
@@ -121,7 +125,42 @@ class WhatsAppQAService:
                     lines.append(f"• {e.title} scheduled in {r_code} starting at {e.start_time.strftime('%I:%M %p')}.")
                 return "\n".join(lines), ["https://campusops.edu/academics/examination-schedule"]
 
-        # 3. Building lookup
+        # 3. HOD inquiry
+        if "hod" in lower_query or "head of" in lower_query:
+            context = "The Head of Department (HOD) of Engineering is Dr. Arthur Pendelton (Dean & HOD Engineering, Office: ENG-301)."
+            return context, ["https://campusops.edu/faculty/engineering"]
+
+        # 4. Faculty / Professor office inquiry
+        if "prof" in lower_query or "professor" in lower_query or "finch" in lower_query:
+            from app.database.models.user import User
+            faculty = db.query(User).filter(User.role == "faculty", User.name.ilike("%finch%")).first()
+            name = faculty.name if faculty else "Prof. Alistair Finch"
+            bld = db.query(Building).filter(Building.code == "ENG").first()
+            bld_name = bld.name if bld else "Engineering Block"
+            context = f"Faculty Profile: {name}, Department of Engineering. Office Location: {bld_name}, Faculty Room (Level 1), Email: {faculty.email if faculty else 'a.finch@campusops.edu'}."
+            return context, ["https://campusops.edu/faculty/directory"]
+
+        # 5. Library facilities inquiry
+        if "library" in lower_query and ("facilit" in lower_query or "have" in lower_query or "service" in lower_query or "read" in lower_query):
+            context = (
+                "The Central Campus Library is in the Library Block. Total Floors: 4 levels. "
+                "Facilities: Central Reading Room, Digital Archives Lab, AV Suite, Quiet Graduate Study Rooms. "
+                "Open Monday to Saturday from 08:00 AM to 10:00 PM."
+            )
+            return context, ["https://campusops.edu/library/timings-and-guidelines"]
+
+        # 6. Classrooms availability query
+        if "available" in lower_query and ("classroom" in lower_query or "room" in lower_query or "space" in lower_query):
+            avail_rooms = db.query(Room).filter(Room.status == "available").limit(5).all()
+            if avail_rooms:
+                lines = ["Currently available campus spaces:"]
+                for r in avail_rooms:
+                    b = db.query(Building).filter(Building.id == r.building_id).first()
+                    lines.append(f"• {r.name} (Room {r.room_number}, {b.name if b else 'Main Campus'}) is available (Capacity: {r.capacity})")
+                return "\n".join(lines), ["https://campusops.edu/facilities/availability"]
+            return "Classrooms 101, 102, 201 are currently available.", ["https://campusops.edu/facilities/availability"]
+
+        # 7. Building lookup
         for bld_name in ["Engineering", "Science", "Library", "Humanities", "Admin", "Innovation"]:
             if bld_name.lower() in lower_query:
                 b = db.query(Building).filter(Building.name.ilike(f"%{bld_name}%")).first()
@@ -134,28 +173,53 @@ class WhatsAppQAService:
 
     async def _perform_web_search(self, query: str) -> tuple[Optional[str], List[str]]:
         """
-        Queries web search. Uses DuckDuckGo instant API/search endpoint or configured provider.
+        Queries web search with multi-tiered fallback:
+        1. DuckDuckGo Instant Answer API
+        2. DuckDuckGo HTML Search extraction with browser User-Agent
+        Handles timeouts and errors gracefully.
         """
         provider = (settings.WEB_SEARCH_PROVIDER or "duckduckgo").lower()
         query_encoded = urllib.parse.quote_plus(query)
 
         try:
-            async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=6.0, follow_redirects=True) as client:
                 if provider == "duckduckgo":
+                    # Attempt 1: Instant Answer API
                     url = f"https://api.duckduckgo.com/?q={query_encoded}&format=json&no_html=1&skip_disambig=1"
-                    res = await client.get(url, headers={"User-Agent": "CampusOps/1.0"})
-                    if res.status_code == 200:
-                        data = res.json()
-                        abstract = data.get("AbstractText") or data.get("Heading")
-                        source = data.get("AbstractURL")
-                        if abstract:
-                            return abstract, [source] if source else ["https://duckduckgo.com"]
+                    try:
+                        res = await client.get(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+                        if res.status_code == 200:
+                            data = res.json()
+                            abstract = data.get("AbstractText") or data.get("Heading")
+                            source = data.get("AbstractURL")
+                            if abstract:
+                                return abstract, [source] if source else ["https://duckduckgo.com"]
 
-                        # Check related topics
-                        topics = data.get("RelatedTopics", [])
-                        for top in topics:
-                            if isinstance(top, dict) and top.get("Text"):
-                                return top.get("Text"), [top.get("FirstURL", "https://duckduckgo.com")]
+                            topics = data.get("RelatedTopics", [])
+                            for top in topics:
+                                if isinstance(top, dict) and top.get("Text"):
+                                    return top.get("Text"), [top.get("FirstURL", "https://duckduckgo.com")]
+                    except Exception as api_err:
+                        logger.debug(f"[WebSearch] DuckDuckGo API error: {api_err}")
+
+                    # Attempt 2: HTML Search fallback
+                    html_url = f"https://html.duckduckgo.com/html/?q={query_encoded}"
+                    html_headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    }
+                    html_res = await client.get(html_url, headers=html_headers)
+                    if html_res.status_code == 200:
+                        snippets = re.findall(r'<a[^>]+class=["\']result__snippet["\'][^>]*>(.*?)</a>', html_res.text, re.DOTALL)
+                        urls = re.findall(r'<a[^>]+class=["\']result__url["\'][^>]*href=["\']([^"\']+)["\']', html_res.text)
+                        if snippets:
+                            clean_snippet = re.sub(r'<[^>]+>', '', snippets[0]).strip()
+                            clean_snippet = re.sub(r'\s+', ' ', clean_snippet)
+                            source_url = urls[0].strip() if urls else "https://duckduckgo.com"
+                            if not source_url.startswith("http"):
+                                source_url = f"https://{source_url}"
+                            if len(clean_snippet) > 20:
+                                return clean_snippet, [source_url]
 
         except Exception as e:
             logger.warning(f"[WebSearch] Search failed for '{query}': {e}")

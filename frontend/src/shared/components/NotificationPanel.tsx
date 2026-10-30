@@ -55,8 +55,14 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, on
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/20 backdrop-blur-xs">
-      <div className="w-full max-w-sm bg-white h-full shadow-2xl flex flex-col border-l border-gray-200 animate-slide-left">
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm bg-white h-full shadow-2xl flex flex-col border-l border-gray-200 animate-slide-left"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="p-4 bg-[#345873] text-white flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Bell size={18} />
@@ -64,7 +70,8 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, on
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
+            className="p-1 rounded-lg hover:bg-white/10 transition cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center"
+            title="Close Alerts"
           >
             <X size={18} />
           </button>
@@ -74,7 +81,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, on
           <span className="text-gray-500 font-medium">Targeted for {user?.role}</span>
           <button
             onClick={handleMarkAllRead}
-            className="text-[#345873] hover:underline font-semibold flex items-center cursor-pointer"
+            className="text-[#345873] hover:underline font-semibold flex items-center cursor-pointer min-h-[36px] px-2"
           >
             <Check size={14} className="mr-1" /> Mark all read
           </button>
@@ -100,34 +107,39 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, on
                   }`}
                 >
                   <div className="flex items-start justify-between">
-                    <h4 className="font-bold text-gray-800">{n.title}</h4>
+                    <span
+                      className={`font-bold ${
+                        isCrit ? 'text-rose-800' : 'text-[#345873]'
+                      }`}
+                    >
+                      {n.title}
+                    </span>
                     {!n.read && (
-                      <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0 mt-1" />
+                      <button
+                        onClick={() => handleMarkRead(n.id)}
+                        className="text-[10px] text-gray-400 hover:text-gray-700 ml-2 shrink-0 cursor-pointer p-1"
+                        title="Mark read"
+                      >
+                        <Check size={12} />
+                      </button>
                     )}
                   </div>
-                  <p className="text-gray-600 mt-1 leading-relaxed">{n.message}</p>
-                  <div className="mt-2.5 flex items-center justify-between pt-2 border-t border-gray-100">
-                    <span className="text-[10px] text-gray-400">
-                      {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  <p className="text-gray-600 mt-1">{n.message}</p>
+                  <div className="flex items-center justify-between mt-2 pt-1 border-t border-gray-100/60 text-[10px] text-gray-400">
+                    <span>
+                      {new Date(n.created_at).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
                     </span>
-                    <div className="flex space-x-2">
-                      {!n.read && (
-                        <button
-                          onClick={() => handleMarkRead(n.id)}
-                          className="text-[11px] text-gray-500 hover:text-gray-800 cursor-pointer"
-                        >
-                          Dismiss
-                        </button>
-                      )}
-                      {n.link_url && (
-                        <a
-                          href={n.link_url}
-                          className="text-[11px] text-[#345873] font-semibold flex items-center hover:underline"
-                        >
-                          View <ExternalLink size={10} className="ml-0.5" />
-                        </a>
-                      )}
-                    </div>
+                    {n.link_url && (
+                      <a
+                        href={n.link_url}
+                        className="text-[#345873] hover:underline font-semibold flex items-center"
+                      >
+                        View <ExternalLink size={10} className="ml-0.5" />
+                      </a>
+                    )}
                   </div>
                 </div>
               );
@@ -138,4 +150,3 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, on
     </div>
   );
 };
-

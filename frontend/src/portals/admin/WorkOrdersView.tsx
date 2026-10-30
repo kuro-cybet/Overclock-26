@@ -219,7 +219,7 @@ export const WorkOrdersView: React.FC = () => {
       {/* Technician "Request Reassignment" Modal */}
       {requestModalOpen && selectedWO && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center space-x-3 mb-2">
               <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
                 <AlertTriangle size={20} />
@@ -327,7 +327,7 @@ export const WorkOrdersView: React.FC = () => {
       {/* Admin Direct Reassign Modal (Only accessible by Administrators) */}
       {reassignModalOpen && selectedWO && !isTechnician && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
             <h3 className="text-base font-extrabold text-[#345873] mb-1">
               Directly Reassign Work Order {selectedWO.work_order_code}
             </h3>

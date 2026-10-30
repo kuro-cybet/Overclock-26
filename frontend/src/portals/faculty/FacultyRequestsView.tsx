@@ -185,7 +185,7 @@ export const FacultyRequestsView: React.FC = () => {
       {/* Ticket Details Modal */}
       {selectedReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 relative">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setSelectedReport(null)}
               className="absolute top-5 right-5 text-gray-400 hover:text-gray-700 cursor-pointer"

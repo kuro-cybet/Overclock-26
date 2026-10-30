@@ -114,3 +114,34 @@ def test_google_login_rejects_account_assigned_to_multiple_roles(monkeypatch):
         db.query(AdminAssignment).filter(AdminAssignment.email == email).delete()
         db.commit()
         db.close()
+
+
+def test_google_login_rejects_deactivated_account(monkeypatch):
+    from app.database.models.user import User
+    email = "deactivated-user@campusops.edu"
+    db = SessionLocal()
+    # Create an active assignment, but user account is deactivated
+    db.query(StudentAssignment).filter(StudentAssignment.email == email).delete()
+    db.query(User).filter(User.email == email).delete()
+    db.add(StudentAssignment(email=email, is_active=True, created_at=datetime.utcnow()))
+    db.add(User(
+        email=email,
+        name="Deactivated Student",
+        role="student",
+        is_active=False,
+        hashed_password="!",
+    ))
+    db.commit()
+    db.close()
+
+    try:
+        _fake_claims(monkeypatch, email)
+        response = client.post("/api/v1/auth/google", json={"credential": "fake"})
+        assert response.status_code == 403, response.text
+        assert "deactivated" in response.json()["detail"].lower()
+    finally:
+        db = SessionLocal()
+        db.query(StudentAssignment).filter(StudentAssignment.email == email).delete()
+        db.query(User).filter(User.email == email).delete()
+        db.commit()
+        db.close()

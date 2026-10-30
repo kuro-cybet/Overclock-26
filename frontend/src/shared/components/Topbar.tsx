@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../core/auth/AuthProvider';
-import { Bell, Search, Shield, Eye } from 'lucide-react';
+import { Bell, Search, Shield, Eye, Menu } from 'lucide-react';
 import { NotificationPanel } from './NotificationPanel';
 import { tokens } from '../../design-system/tokens';
 
 interface TopbarProps {
   onSearch?: (term: string) => void;
   portalName: string;
+  onToggleMobileMenu?: () => void;
 }
 
 const PREVIEW_ROLES = [
@@ -16,7 +17,7 @@ const PREVIEW_ROLES = [
   { value: 'student', label: 'Student' },
 ];
 
-export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
+export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName, onToggleMobileMenu }) => {
   const { user, isSystemAdmin, impersonate, logout } = useAuth();
   const navigate = useNavigate();
   const [notifOpen, setNotifOpen] = useState(false);
@@ -50,15 +51,25 @@ export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
 
   return (
     <>
-      <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
-        {/* Left: Portal Title & Search */}
-        <div className="flex items-center space-x-6 flex-1 max-w-xl">
-          <div className="flex items-center space-x-2">
+      <header className="h-16 bg-white border-b border-slate-200 px-3 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+        {/* Left: Mobile Hamburger, Portal Title & Desktop Search */}
+        <div className="flex items-center space-x-2 sm:space-x-4 flex-1 min-w-0 max-w-xl">
+          <button
+            type="button"
+            onClick={onToggleMobileMenu}
+            className="md:hidden p-2 -ml-1 rounded-xl text-[#345873] hover:bg-[#FFF4E9] transition min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0 cursor-pointer"
+            title="Toggle Menu"
+            aria-label="Toggle Navigation Menu"
+          >
+            <Menu size={22} />
+          </button>
+
+          <div className="flex items-center space-x-2 min-w-0">
             <span
-              className="w-3 h-3 rounded-full"
+              className="w-3 h-3 rounded-full shrink-0"
               style={{ backgroundColor: currentRoleAccent.color }}
             />
-            <h2 className="text-lg font-extrabold text-[#345873] tracking-tight whitespace-nowrap">
+            <h2 className="text-sm sm:text-lg font-extrabold text-[#345873] tracking-tight truncate">
               {portalName}
             </h2>
           </div>
@@ -76,11 +87,11 @@ export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
         </div>
 
         {/* Right: Alerts & User Profile */}
-        <div className="flex items-center space-x-3">
-          {/* System administrator: portal preview switcher (only while not previewing) */}
+        <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+          {/* System administrator: portal preview switcher */}
           {isSystemAdmin && (
-            <div className="hidden md:flex items-center space-x-2 bg-[#EAF3F9] px-3 py-1.5 rounded-xl border border-[#8EB9D8]/60">
-              <Eye size={14} className="text-[#345873]" />
+            <div className="hidden sm:flex items-center space-x-2 bg-[#EAF3F9] px-3 py-1.5 rounded-xl border border-[#8EB9D8]/60">
+              <Eye size={14} className="text-[#345873] shrink-0" />
               <select
                 value=""
                 onChange={handlePortalChange}
@@ -88,7 +99,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
                 title="Open another portal as that role"
                 className="bg-transparent text-[11px] font-bold text-[#345873] uppercase tracking-wider focus:outline-none cursor-pointer disabled:opacity-50"
               >
-                <option value="">{switching ? 'Opening…' : 'Switch portal…'}</option>
+                <option value="">{switching ? 'Opening…' : 'Switch…'}</option>
                 {PREVIEW_ROLES.map((role) => (
                   <option key={role.value} value={role.value}>
                     {role.label}
@@ -112,31 +123,32 @@ export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName }) => {
           {/* Notification Button */}
           <button
             onClick={() => setNotifOpen(true)}
-            className="relative p-2 rounded-xl text-gray-600 hover:bg-[#FFF4E9] transition cursor-pointer"
+            className="relative p-2 rounded-xl text-gray-600 hover:bg-[#FFF4E9] transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
             title="Open Notification Center"
+            aria-label="Notifications"
           >
             <Bell size={20} />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
+            <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
           </button>
 
           {/* User badge */}
-          <div className="flex items-center space-x-3 pl-3 border-l border-slate-200">
+          <div className="flex items-center space-x-2 sm:space-x-3 pl-2 sm:pl-3 border-l border-slate-200">
             <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-white text-xs shadow-xs"
+              className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-white text-xs shadow-xs shrink-0"
               style={{ backgroundColor: currentRoleAccent.color }}
             >
               {user?.name?.slice(0, 2).toUpperCase() || 'OP'}
             </div>
             <div className="hidden sm:block text-left">
-              <p className="text-xs font-bold text-[#345873] leading-tight">{user?.name}</p>
-              <p className="text-[10px] text-gray-500 capitalize tracking-wide flex items-center">
-                <Shield size={10} className="mr-0.5" />
+              <p className="text-xs font-bold text-[#345873] leading-tight truncate max-w-[120px]">{user?.name}</p>
+              <p className="text-[10px] text-gray-500 capitalize tracking-wide flex items-center truncate">
+                <Shield size={10} className="mr-0.5 shrink-0" />
                 {user?.sub_role ? String(user.sub_role).replace(/_/g, ' ') : user?.role}
               </p>
             </div>
             <button
               onClick={logout}
-              className="text-xs text-rose-500 hover:text-rose-700 font-semibold ml-2 cursor-pointer"
+              className="text-xs text-rose-500 hover:text-rose-700 font-semibold p-1 sm:ml-1 cursor-pointer min-h-[36px] flex items-center"
               title="Sign out"
             >
               Sign out

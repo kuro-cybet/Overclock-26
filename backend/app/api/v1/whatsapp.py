@@ -13,7 +13,6 @@ from app.services.whatsapp_service import whatsapp_service
 from app.services.whatsapp_ticket_service import whatsapp_ticket_service
 from app.services.whatsapp_message_processor import whatsapp_message_processor
 from app.services.whatsapp_ai_client import whatsapp_ai_client
-from app.services.whatsapp_assistant import whatsapp_assistant
 from app.schemas.whatsapp import (
     WhatsAppSendRequest,
     WhatsAppSendResponse,
@@ -265,27 +264,35 @@ class WhatsAppSimulatePayload(BaseModel):
 @router.post(
     "/simulate",
     summary="Simulate Inbound WhatsApp Message",
-    description="Simulates incoming WhatsApp chat interactions for testing and Admin UI."
+    description="Simulates incoming WhatsApp chat interactions using the unified WhatsApp message processor."
 )
-def simulate_whatsapp_message(
+async def simulate_whatsapp_message(
     payload: WhatsAppSimulatePayload,
     db: Session = Depends(get_db)
 ):
     import uuid
     sim_msg_id = f"sim_{uuid.uuid4().hex[:12]}"
-    reply = whatsapp_assistant.handle_incoming_message(
+    clean_phone = payload.from_phone.replace("+", "").replace("-", "").replace(" ", "").strip()
+
+    reply = await whatsapp_message_processor.process_inbound_message(
         db=db,
-        from_phone=payload.from_phone,
-        text=payload.message,
-        message_id=sim_msg_id
+        message_id=sim_msg_id,
+        sender_phone=clean_phone,
+        recipient_phone="CampusOps",
+        text=payload.message
     )
-    session = whatsapp_assistant.get_or_create_session(db, payload.from_phone)
+
+    conv = db.query(WhatsAppConversation).filter(WhatsAppConversation.phone_number == clean_phone).first()
+    state = conv.state if conv else "idle"
+    intent = conv.current_intent if conv else None
+
     return {
         "status": "ok",
-        "reply": reply,
+        "reply": reply or "",
         "from_phone": payload.from_phone,
-        "session_step": session.step,
-        "current_intent": session.current_intent
+        "session_step": state.upper(),
+        "state": state,
+        "current_intent": intent
     }
 
 @router.get(
@@ -297,17 +304,30 @@ def get_whatsapp_session(
     phone_number: str,
     db: Session = Depends(get_db)
 ):
-    clean = phone_number.replace("+", "").replace("-", "").strip()
+    clean = phone_number.replace("+", "").replace("-", "").replace(" ", "").strip()
+    conv = db.query(WhatsAppConversation).filter(WhatsAppConversation.phone_number == clean).first()
+    if conv:
+        return {
+            "phone_number": phone_number,
+            "step": conv.state.upper(),
+            "state": conv.state,
+            "current_intent": conv.current_intent,
+            "user_id": conv.user_id,
+            "last_active_at": conv.last_interaction_at.isoformat() if conv.last_interaction_at else None
+        }
+
     session = db.query(WhatsAppSession).filter(WhatsAppSession.phone_number == clean).first()
-    if not session:
-        return {"phone_number": phone_number, "step": "IDLE", "current_intent": None}
-    return {
-        "phone_number": session.phone_number,
-        "step": session.step,
-        "current_intent": session.current_intent,
-        "user_id": session.user_id,
-        "last_active_at": session.last_active_at.isoformat() if session.last_active_at else None
-    }
+    if session:
+        return {
+            "phone_number": session.phone_number,
+            "step": session.step,
+            "state": session.step.lower(),
+            "current_intent": session.current_intent,
+            "user_id": session.user_id,
+            "last_active_at": session.last_active_at.isoformat() if session.last_active_at else None
+        }
+
+    return {"phone_number": phone_number, "step": "IDLE", "state": "idle", "current_intent": None}
 
 @router.get(
     "/logs",

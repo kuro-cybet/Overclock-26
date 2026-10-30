@@ -93,7 +93,7 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-      <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 relative animate-scale-up">
+      <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 relative animate-scale-up max-h-[90vh] overflow-y-auto">
         <button
           onClick={handleResetAndClose}
           className="absolute top-5 right-5 text-gray-400 hover:text-gray-700 cursor-pointer"

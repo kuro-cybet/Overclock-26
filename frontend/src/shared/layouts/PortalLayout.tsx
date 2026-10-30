@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { Eye, LogOut } from 'lucide-react';
 import { Sidebar } from '../components/Sidebar';
@@ -12,6 +12,7 @@ interface PortalLayoutProps {
 export const PortalLayout: React.FC<PortalLayoutProps> = ({ portalName }) => {
   const { user, previewOf, exitPreview } = useAuth();
   const navigate = useNavigate();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleExitPreview = () => {
     exitPreview();
@@ -20,7 +21,10 @@ export const PortalLayout: React.FC<PortalLayoutProps> = ({ portalName }) => {
 
   return (
     <div className="flex min-h-screen bg-[#FFF4E9]">
-      <Sidebar />
+      <Sidebar
+        mobileOpen={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
+      />
       <div className="flex-1 flex flex-col min-w-0">
         {/* Always-visible preview strip: guarantees a way out of a preview on any screen size. */}
         {previewOf && (
@@ -33,15 +37,18 @@ export const PortalLayout: React.FC<PortalLayoutProps> = ({ portalName }) => {
               type="button"
               onClick={handleExitPreview}
               title={`Return to ${previewOf.name}'s admin session`}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-950/10 px-2.5 py-1 font-black uppercase tracking-wide hover:bg-amber-950/20 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-950/10 px-2.5 py-1 font-black uppercase tracking-wide hover:bg-amber-950/20 cursor-pointer min-h-[36px]"
             >
               <LogOut size={12} />
               <span>Exit preview</span>
             </button>
           </div>
         )}
-        <Topbar portalName={portalName} />
-        <main className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto overflow-y-auto">
+        <Topbar
+          portalName={portalName}
+          onToggleMobileMenu={() => setMobileMenuOpen((prev) => !prev)}
+        />
+        <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl w-full mx-auto overflow-y-auto min-w-0">
           <Outlet />
         </main>
       </div>

@@ -186,37 +186,48 @@ class NotificationService:
                 .first()
             )
             user = db.query(User).filter(User.id == report.reporter_id).first()
-            phone = link.phone_number if link else (user.phone_number if (user and user.whatsapp_verified) else None)
+            phone = link.phone_number if link else (user.phone_number if (user and user.whatsapp_verified) else getattr(report, 'contact_phone', None))
 
             if not phone:
                 continue
 
             # Format status message per specifications
             status_title = new_status.replace("_", " ").title()
-            if new_status in ["resolved", "closed"]:
+            if new_status in ["resolved", "closed", "completed"]:
                 body = (
-                    f"🎉 *Your ticket {incident.incident_code} has been {new_status}.*\n\n"
+                    f"🎉 *Your ticket {incident.incident_code} has been marked as resolved.*\n\n"
                     f"The reported {incident.category} issue has been marked as completed.\n\n"
                     f"Thank you for using CampusOps."
                 )
+                subject = f"Ticket {incident.incident_code} resolved"
             elif new_status == "in_progress":
                 body = (
                     f"🔔 *Update for Ticket {incident.incident_code}:*\n\n"
                     f"*Status:* Work in Progress\n\n"
-                    f"{extra_details or f'A technician has started inspecting and servicing the issue.'}"
+                    f"Your complaint is now being addressed. {extra_details or 'A technician has started inspecting and servicing the issue.'}"
                 )
+                subject = f"Ticket {incident.incident_code} in_progress"
+            elif new_status == "assigned":
+                body = (
+                    f"🔔 *Update for Ticket {incident.incident_code}:*\n\n"
+                    f"*Status:* Assigned\n\n"
+                    f"Your complaint has been assigned to a technician. {extra_details or ''}"
+                )
+                subject = f"Ticket {incident.incident_code} assigned"
             elif new_status in ["pending_parts", "blocked"]:
                 body = (
                     f"🔔 *Update for Ticket {incident.incident_code}:*\n\n"
                     f"*Status:* Waiting for Resources\n\n"
                     f"{extra_details or 'Required replacement parts have been requisitioned for this work order.'}"
                 )
+                subject = f"Ticket {incident.incident_code} {new_status}"
             else:
                 body = (
                     f"🔔 *Update for Ticket {incident.incident_code}:*\n\n"
                     f"*Status:* {status_title}\n\n"
                     f"{extra_details or f'Your ticket status has been updated to {status_title}.'}"
                 )
+                subject = f"Ticket {incident.incident_code} {new_status}"
 
             idempotency_key = f"wa_ticket_{incident.incident_code}_{new_status}_{report.reporter_id}"
             self.queue_whatsapp_notification(
@@ -225,7 +236,7 @@ class NotificationService:
                 body=body,
                 idempotency_key=idempotency_key,
                 recipient_email=user.email if user else None,
-                subject=f"Ticket {incident.incident_code} Update"
+                subject=subject
             )
 
     def process_pending_outbox(self, db: Session, max_items: int = 25) -> Dict[str, Any]:
@@ -345,8 +356,7 @@ class NotificationService:
                         item.status = "sent"
                         sent_count += 1
                     else:
-                        if item.attempts >= 3:
-                            item.status = "failed"
+                        item.status = "failed" if item.attempts >= 3 else "queued"
                         failed_count += 1
                 else:
                     delivery = gmail_sender.send(

@@ -439,7 +439,7 @@ export const TechnicianDashboard: React.FC = () => {
       {/* Spare Parts Requisition Modal */}
       {partsModalOpen && activeTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-xl border border-slate-100 animate-scale-up">
+          <div className="bg-white rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-xl border border-slate-100 animate-scale-up max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center space-x-2">
                 <div className="p-2 bg-amber-100 text-amber-700 rounded-xl">

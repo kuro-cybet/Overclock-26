@@ -13,6 +13,7 @@ from app.database.models.campus import Building
 from app.database.models.room import Room
 from app.services.sla_service import sla_service
 from app.services.notification_service import notification_service
+from app.services import work_order_service
 
 logger = logging.getLogger("whatsapp_ticket_service")
 
@@ -93,7 +94,7 @@ class WhatsAppTicketService:
 
     def get_user_by_phone(self, db: Session, phone_number: str) -> Optional[User]:
         """Retrieves a verified CampusOps user by their WhatsApp phone number."""
-        clean_phone = phone_number.replace("+", "").strip()
+        clean_phone = phone_number.replace("+", "").replace("-", "").replace(" ", "").strip()
         link = (
             db.query(WhatsAppUserLink)
             .filter(
@@ -105,8 +106,17 @@ class WhatsAppTicketService:
         if link:
             return db.query(User).filter(User.id == link.user_id).first()
 
-        # Fallback check on User table
-        return db.query(User).filter(User.phone_number == clean_phone, User.whatsapp_verified == True).first()
+        # Fallback check on User table with various phone formats
+        user = (
+            db.query(User)
+            .filter(
+                (User.phone_number == clean_phone) |
+                (User.phone_number == f"+{clean_phone}") |
+                (User.phone_number == phone_number.strip())
+            )
+            .first()
+        )
+        return user
 
     # ---------------------------------------------------------
     # 2. Location Validation
@@ -193,8 +203,13 @@ class WhatsAppTicketService:
 
         # Create linked report
         report_count = db.query(Report).count()
+        report_code = f"RPT-{datetime.utcnow().strftime('%Y%m')}-{report_count + 1:04d}"
+        while db.query(Report).filter(Report.report_code == report_code).first():
+            report_count += 1
+            report_code = f"RPT-{datetime.utcnow().strftime('%Y%m')}-{report_count + 1:04d}"
+
         report = Report(
-            report_code=f"RPT-{datetime.utcnow().strftime('%Y%m')}-{report_count + 1:04d}",
+            report_code=report_code,
             title=incident.title,
             description=description,
             category=category.lower(),
@@ -204,14 +219,35 @@ class WhatsAppTicketService:
             reporter_id=user.id,
             reporter_role=user.role,
             source="whatsapp",
+            contact_phone=user.phone_number,
             status="correlated",
             incident_id=incident.id
         )
         db.add(report)
+        db.flush()
+
+        # Automatically create WorkOrder and attempt technician auto-assignment
+        try:
+            work_order, technician = work_order_service.ensure_work_order_for_incident(
+                db,
+                incident,
+                actor_id=user.id,
+                auto_assign=True
+            )
+            if technician:
+                incident.status = "assigned"
+                logger.info(f"[WhatsApp] Auto-assigned technician {technician.name} ({technician.id}) to incident {incident.incident_code}")
+            else:
+                incident.status = "open"
+                logger.info(f"[WhatsApp] No technician auto-assigned for incident {incident.incident_code}; status remains open")
+        except Exception as e:
+            logger.error(f"[WhatsApp] Work order auto-dispatch error for {incident.incident_code}: {e}", exc_info=True)
+            incident.status = "open"
+
         db.commit()
         db.refresh(incident)
 
-        logger.info(f"[WhatsApp] Created ticket {incident.incident_code} for user {user.email}")
+        logger.info(f"[WhatsApp] Created ticket {incident.incident_code} (Status: {incident.status}) for user {user.email}")
         return incident
 
     # ---------------------------------------------------------
@@ -226,36 +262,57 @@ class WhatsAppTicketService:
         if query_code:
             clean_code = query_code.strip().upper()
             incident = db.query(Incident).filter(Incident.incident_code == clean_code).first()
+            report = None
             if not incident:
+                rpt_search = clean_code.replace("CMP-", "RPT-")
+                report = db.query(Report).filter((Report.report_code == clean_code) | (Report.report_code == rpt_search)).first()
+                if report and report.incident_id:
+                    incident = db.query(Incident).filter(Incident.id == report.incident_id).first()
+
+            if not incident and not report:
                 return f"Could not find any ticket with code {clean_code}. Please verify the ticket reference number."
 
-            # Verify ownership: check if user is reporter of any linked report or admin
-            if user.role != "admin":
-                is_owner = db.query(Report).filter(
-                    Report.incident_id == incident.id,
-                    Report.reporter_id == user.id
-                ).first()
-                if not is_owner:
-                    return f"Ticket {clean_code} is restricted. You may only view tickets that you personally submitted."
+            # Verify ownership: check if user is reporter of report/incident or admin
+            clean_user_phone = user.phone_number.replace("+", "").strip() if user.phone_number else None
+            is_owner = False
+            if user.role == "admin":
+                is_owner = True
+            elif report:
+                if report.reporter_id == user.id:
+                    is_owner = True
+                elif clean_user_phone and report.contact_phone and clean_user_phone in report.contact_phone:
+                    is_owner = True
+            elif incident:
+                rep_match = db.query(Report).filter(Report.incident_id == incident.id).first()
+                if rep_match:
+                    if rep_match.reporter_id == user.id:
+                        is_owner = True
+                    elif clean_user_phone and rep_match.contact_phone and clean_user_phone in rep_match.contact_phone:
+                        is_owner = True
 
-            wo = db.query(WorkOrder).filter(WorkOrder.incident_id == incident.id).first()
+            if not is_owner:
+                return f"Unauthorized: Ticket {clean_code} is restricted. You may only view tickets that you personally submitted."
+
+            wo = db.query(WorkOrder).filter(WorkOrder.incident_id == incident.id).first() if incident else None
             tech_name = "Not yet assigned"
             if wo and wo.assigned_technician_id:
                 tech = db.query(User).filter(User.id == wo.assigned_technician_id).first()
                 if tech:
                     tech_name = tech.name
 
-            room = db.query(Room).filter(Room.id == incident.room_id).first() if incident.room_id else None
+            title = incident.title if incident else report.title
+            status_text = (incident.status if incident else report.status).replace("_", " ").title()
+            room_id = incident.room_id if incident else report.room_id
+            room = db.query(Room).filter(Room.id == room_id).first() if room_id else None
             loc = room.room_number if room else "Campus Facility"
 
             return (
-                f"📋 *Ticket Details: {incident.incident_code}*\n\n"
-                f"• *Title:* {incident.title}\n"
-                f"• *Status:* {incident.status.replace('_', ' ').title()}\n"
-                f"• *Priority:* {incident.priority}\n"
+                f"📋 *Ticket Details: {clean_code}* (Complaint Details: {clean_code})\n\n"
+                f"• *Title:* {title}\n"
+                f"• *Status:* {status_text}\n"
                 f"• *Location:* {loc}\n"
                 f"• *Technician:* {tech_name}\n"
-                f"• *Logged:* {incident.created_at.strftime('%d %b %Y, %I:%M %p')}\n\n"
+                f"• *Logged:* {(incident.created_at if incident else report.created_at).strftime('%d %b %Y, %I:%M %p')}\n\n"
                 f"You will automatically receive WhatsApp updates as work progresses."
             )
 

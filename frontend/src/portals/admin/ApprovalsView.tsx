@@ -150,7 +150,7 @@ export const ApprovalsView: React.FC = () => {
       {/* Decision Modal */}
       {decisionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
             <h3 className="text-base font-extrabold text-[#345873] mb-1 capitalize">
               Confirm {decisionModal.action}
             </h3>

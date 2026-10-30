@@ -182,6 +182,14 @@ def test_ticket_creation_from_whatsapp(db_session):
     assert report is not None
     assert report.source == "whatsapp"
     assert report.reporter_id == student.id
+    assert report.contact_phone == student.phone_number
+
+    # Verify WorkOrder was created and linked
+    from app.database.models.work_order import WorkOrder
+    work_order = db_session.query(WorkOrder).filter(WorkOrder.incident_id == incident.id).first()
+    assert work_order is not None
+    assert work_order.incident_id == incident.id
+    assert incident.status in ["open", "assigned"]
 
 def test_ticket_ownership_access_control(db_session):
     """Verifies students cannot access other students' private tickets."""
@@ -300,3 +308,36 @@ async def test_qa_no_reliable_information_fallback(db_session):
         )
         ans = await whatsapp_qa_service.answer_query(db_session, "What is the secret recipe for Martian space soup?")
         assert ans == FALLBACK_RESPONSE
+
+
+# -------------------------------------------------------------
+# 7. Simulator Unified Pipeline Tests
+# -------------------------------------------------------------
+def test_whatsapp_simulate_endpoint_multiturn_flow(db_session):
+    """Verifies /simulate endpoint uses the authoritative message processor and creates real tickets."""
+    student = db_session.query(User).filter(User.role == "student").first()
+    phone = "15557778899"
+    student.phone_number = phone
+    student.whatsapp_verified = True
+    db_session.commit()
+
+    # Step 1: Greeting
+    res1 = client.post("/api/v1/whatsapp/simulate", json={"from_phone": phone, "message": "Hi"})
+    assert res1.status_code == 200
+    assert "CampusOps" in res1.json()["reply"]
+
+    # Step 2: Report issue with location
+    res2 = client.post("/api/v1/whatsapp/simulate", json={"from_phone": phone, "message": "Projector not working in Room 204"})
+    assert res2.status_code == 200
+    assert "Shall I register this issue?" in res2.json()["reply"]
+    assert res2.json()["session_step"] == "AWAITING_CONFIRMATION"
+
+    # Step 3: Confirm registration
+    res3 = client.post("/api/v1/whatsapp/simulate", json={"from_phone": phone, "message": "Yes"})
+    assert res3.status_code == 200
+    data3 = res3.json()
+    assert "Your issue has been registered successfully." in data3["reply"]
+    assert "Ticket ID: COP-" in data3["reply"]
+    assert "Location:" in data3["reply"]
+    assert "Status:" in data3["reply"]
+    assert data3["session_step"] == "IDLE"

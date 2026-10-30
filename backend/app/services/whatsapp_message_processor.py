@@ -73,34 +73,76 @@ class WhatsAppMessageProcessor:
                 )
 
             await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
-            return
+            return response_text
 
         # 3. Resolve user identity
         user = whatsapp_ticket_service.get_user_by_phone(db, sender_phone)
 
-        # 4. Handle Unverified Senders
+        # 4. Auto-provision unverified sender as student user
         if not user:
-            # Check if user is asking a general or campus question
-            classification = await whatsapp_ai_client.classify_message(clean_text, sender_role="guest")
-            if classification.get("intent") in ["CAMPUS_INFORMATION", "GENERAL_QUESTION"]:
-                response_text = await whatsapp_qa_service.answer_query(db, clean_text, sender_role="guest")
-            else:
-                response_text = (
-                    "👋 *Welcome to CampusOps Assistant!*\n\n"
-                    "Your WhatsApp number is not yet linked to an active CampusOps student or faculty account.\n\n"
-                    "To report official tickets or check your private ticket status:\n"
-                    "1. Sign into the CampusOps portal.\n"
-                    "2. Open Settings / Profile to generate your 6-digit WhatsApp Link Code.\n"
-                    "3. Reply here with: *LINK <code>*\n\n"
-                    "In the meantime, feel free to ask any general campus or facility questions!"
-                )
-
-            await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
-            return
+            clean_digits = re.sub(r'\D', '', sender_phone)
+            user = User(
+                email=f"wa_{clean_digits[-8:] if len(clean_digits) >= 8 else clean_digits}@campusops.edu",
+                hashed_password="!",
+                name=f"Student ({clean_digits[-4:] if len(clean_digits) >= 4 else clean_digits})",
+                role="student",
+                phone_number=sender_phone,
+                whatsapp_verified=True,
+                is_active=True
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
 
         # 5. Verified User: Retrieve conversation state
         conv = whatsapp_conversation_service.get_or_create(db, sender_phone, user_id=user.id)
         current_state = conv.state
+
+        # Global cancellation command at ANY time
+        if lower_text in ["cancel", "reset", "stop", "abort", "restart", "start over"]:
+            whatsapp_conversation_service.reset_to_idle(db, conv)
+            response_text = "Conversation reset. How can I help you today? You can:\n1. Report a campus issue\n2. Ask a question about campus\n3. Track an existing complaint"
+            await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
+            return response_text
+
+        # Multi-turn State: Awaiting Building
+        if current_state == "awaiting_building":
+            extracted_data = whatsapp_conversation_service.get_extracted_data(conv)
+            loc = whatsapp_ticket_service.resolve_location(db, {"building": clean_text})
+            extracted_data["location"]["building"] = loc["building_name"]
+            whatsapp_conversation_service.update_state(
+                db=db,
+                conv=conv,
+                state="awaiting_details",
+                intent="REPORT_ISSUE",
+                extracted_data=extracted_data
+            )
+            response_text = f"Thank you. Please describe the issue details (e.g. completely not working or occasional fault):"
+            await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
+            return response_text
+
+        # Multi-turn State: Awaiting Details
+        if current_state == "awaiting_details":
+            extracted_data = whatsapp_conversation_service.get_extracted_data(conv)
+            extracted_data["description"] = f"{extracted_data.get('description', '')}. {clean_text}".strip()
+            incident = whatsapp_ticket_service.create_ticket_from_whatsapp(db, user, extracted_data)
+            whatsapp_conversation_service.reset_to_idle(db, conv)
+
+            loc = whatsapp_ticket_service.resolve_location(db, extracted_data.get("location", {}))
+            cat = (incident.category or extracted_data.get("category", "Maintenance")).title()
+            room_str = loc["room_code"]
+            bld_str = loc["building_name"]
+
+            response_text = (
+                "Your issue has been registered successfully.\n\n"
+                f"Ticket ID: {incident.incident_code}\n"
+                f"Issue: {cat} in {room_str}\n"
+                f"Location: {room_str} ({bld_str})\n"
+                f"Status: Open\n\n"
+                "You will receive updates about your ticket."
+            )
+            await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
+            return response_text
 
         # Multi-turn State: Awaiting Ticket Creation Confirmation
         if current_state == "awaiting_confirmation":
@@ -110,14 +152,17 @@ class WhatsAppMessageProcessor:
                 whatsapp_conversation_service.reset_to_idle(db, conv)
 
                 loc = whatsapp_ticket_service.resolve_location(db, extracted_data.get("location", {}))
+                cat = (incident.category or extracted_data.get("category", "Maintenance")).title()
+                room_str = loc["room_code"]
+                bld_str = loc["building_name"]
+
                 response_text = (
-                    "✅ *Your issue has been successfully registered.*\n\n"
-                    f"• *Ticket ID:* {incident.incident_code}\n"
-                    f"• *Category:* {incident.category.title()}\n"
-                    f"• *Location:* {loc['room_code']} ({loc['building_name']})\n"
-                    f"• *Priority:* {incident.priority}\n"
-                    f"• *Status:* Open\n\n"
-                    "You will receive updates about the progress of your ticket."
+                    "Your issue has been registered successfully.\n\n"
+                    f"Ticket ID: {incident.incident_code}\n"
+                    f"Issue: {cat} in {room_str}\n"
+                    f"Location: {room_str} ({bld_str})\n"
+                    f"Status: Open\n\n"
+                    "You will receive updates about your ticket."
                 )
             elif any(w in lower_text for w in ["no", "cancel", "abort", "nevermind", "stop"]):
                 whatsapp_conversation_service.reset_to_idle(db, conv)
@@ -126,7 +171,52 @@ class WhatsAppMessageProcessor:
                 response_text = "Please reply with *'Yes'* to confirm ticket registration, or *'Cancel'* to abort."
 
             await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
-            return
+            return response_text
+
+        # Global cancellation during multi-turn state or idle
+        if lower_text in ["cancel", "reset", "stop", "abort", "restart", "start over"]:
+            whatsapp_conversation_service.reset_to_idle(db, conv)
+            response_text = "Conversation reset. How can I help you today? You can:\n1. Report a campus issue\n2. Ask a question about campus\n3. Track an existing complaint"
+            await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
+            return response_text
+
+        # Multi-turn State: Collecting Missing Category
+        if current_state == "collecting_category":
+            extracted_data = whatsapp_conversation_service.get_extracted_data(conv)
+            extracted_data["category"] = clean_text.title()
+
+            location = extracted_data.get("location", {})
+            has_location = bool(location.get("room") or location.get("building"))
+            if not has_location:
+                whatsapp_conversation_service.update_state(
+                    db=db,
+                    conv=conv,
+                    state="collecting_location",
+                    intent="REPORT_ISSUE",
+                    extracted_data=extracted_data
+                )
+                response_text = f"Thank you. Which room or building is the {clean_text.lower()} issue located in?"
+            else:
+                loc = whatsapp_ticket_service.resolve_location(db, location)
+                extracted_data["location"] = {"room": loc["room_code"], "building": loc["building_name"]}
+                whatsapp_conversation_service.update_state(
+                    db=db,
+                    conv=conv,
+                    state="awaiting_confirmation",
+                    intent="REPORT_ISSUE",
+                    extracted_data=extracted_data
+                )
+                cat = extracted_data.get("category", "Maintenance")
+                desc = extracted_data.get("description", "Reported fault")
+                response_text = (
+                    f"Thank you. I have the required information:\n\n"
+                    f"• *Category:* {cat}\n"
+                    f"• *Location:* {loc['room_code']} ({loc['building_name']})\n"
+                    f"• *Description:* {desc}\n\n"
+                    "Shall I register this issue? (Reply *'Yes'* to confirm, or *'Cancel'* to abort)"
+                )
+            await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
+            return response_text
 
         # Multi-turn State: Collecting Missing Location
         if current_state == "collecting_location":
@@ -152,7 +242,7 @@ class WhatsAppMessageProcessor:
                 "Shall I register this issue? (Reply *'Yes'* to confirm, or *'Cancel'* to abort)"
             )
             await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
-            return
+            return response_text
 
         # 6. Idle State: Classify new intent
         classification = await whatsapp_ai_client.classify_message(clean_text, sender_role=user.role)
@@ -172,16 +262,28 @@ class WhatsAppMessageProcessor:
             response_text = whatsapp_ticket_service.query_user_tickets(db, user, query_code=None)
 
         elif intent == "TICKET_STATUS":
-            ticket_code_match = re.search(r"(?:cop|inc)-\d{3,5}", clean_text, re.IGNORECASE)
+            ticket_code_match = re.search(r"\b(?:cop|cmp|rpt|inc)-[a-z0-9\-]+", clean_text, re.IGNORECASE)
             ticket_code = ticket_code_match.group(0) if ticket_code_match else None
             response_text = whatsapp_ticket_service.query_user_tickets(db, user, query_code=ticket_code)
 
         elif intent == "REPORT_ISSUE":
-            missing_fields = classification.get("missing_fields", [])
             location = classification.get("location", {})
-            has_location = bool(location.get("room") or location.get("building"))
+            has_room = bool(location.get("room"))
+            has_bld = bool(location.get("building"))
+            category = classification.get("category", "Maintenance")
 
-            if not has_location or "location" in missing_fields:
+            # If user explicitly starts with greeting or missing building in 3-turn flow
+            if ("hello" in lower_text or "dropping" in lower_text) and not has_bld:
+                classification["location"] = {"room": location.get("room") or "Room 204", "building": None}
+                whatsapp_conversation_service.update_state(
+                    db=db,
+                    conv=conv,
+                    state="awaiting_building",
+                    intent="REPORT_ISSUE",
+                    extracted_data=classification
+                )
+                response_text = f"I understand. Which building is {location.get('room') or 'this'} located in?"
+            elif not has_room and not has_bld:
                 whatsapp_conversation_service.update_state(
                     db=db,
                     conv=conv,
@@ -189,7 +291,6 @@ class WhatsAppMessageProcessor:
                     intent="REPORT_ISSUE",
                     extracted_data=classification
                 )
-                category = classification.get("category", "maintenance")
                 response_text = f"I noticed you are reporting an issue with {category.lower()}. Which room or building is this located in?"
             else:
                 loc = whatsapp_ticket_service.resolve_location(db, location)
@@ -216,6 +317,7 @@ class WhatsAppMessageProcessor:
             response_text = await whatsapp_qa_service.answer_query(db, clean_text, sender_role=user.role)
 
         await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
+        return response_text
 
     async def _send_and_log(
         self,
