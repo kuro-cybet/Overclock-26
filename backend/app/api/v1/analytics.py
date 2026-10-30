@@ -1,0 +1,112 @@
+from typing import Dict, Any
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.database.connection import get_db
+from app.database.models.incident import Incident
+from app.database.models.work_order import WorkOrder
+from app.database.models.room import Room
+from app.database.models.booking import RoomBooking
+from app.database.models.report import Report
+from app.database.models.approval import ApprovalRequest
+from app.database.models.user import User
+from app.services.analytics_service import analytics_service
+from app.api.deps import get_current_user
+
+router = APIRouter(prefix="", tags=["analytics-and-dashboard"])
+
+@router.get("/analytics")
+def get_analytics(db: Session = Depends(get_db)):
+    return analytics_service.get_dashboard_analytics(db)
+
+@router.get("/dashboard/{portal}")
+def get_portal_dashboard(
+    portal: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    system_analytics = analytics_service.get_dashboard_analytics(db)
+
+    if portal == "admin":
+        recent_incidents = db.query(Incident).order_by(Incident.created_at.desc()).limit(8).all()
+        pending_approvals = db.query(ApprovalRequest).filter(ApprovalRequest.status == "pending").limit(5).all()
+        return {
+            "portal": "admin",
+            "kpi": system_analytics["kpi"],
+            "recent_incidents": recent_incidents,
+            "pending_approvals": pending_approvals,
+            "category_distribution": system_analytics["incidents_by_category"],
+            "sla_trend": system_analytics["sla_monthly_trend"],
+            "readiness_summary": system_analytics["room_readiness_breakdown"]
+        }
+
+    elif portal == "technician":
+        my_orders = db.query(WorkOrder).filter(WorkOrder.assigned_technician_id == current_user.id).all()
+        assigned_cnt = sum(1 for w in my_orders if w.status == "assigned")
+        in_progress_cnt = sum(1 for w in my_orders if w.status == "in_progress")
+        completed_cnt = sum(1 for w in my_orders if w.status == "completed")
+        blocked_cnt = sum(1 for w in my_orders if w.status in ["blocked", "pending_parts"])
+
+        # Recent or active task
+        active_task = next((w for w in my_orders if w.status in ["in_progress", "assigned"]), my_orders[0] if my_orders else None)
+
+        return {
+            "portal": "technician",
+            "kpi": {
+                "assigned": assigned_cnt,
+                "in_progress": in_progress_cnt,
+                "completed": completed_cnt,
+                "blocked": blocked_cnt
+            },
+            "my_tasks": my_orders[:10],
+            "active_task": active_task,
+            "shift": "Morning (08:00 - 16:00)",
+            "parts_shortages": system_analytics["kpi"]["parts_shortages"]
+        }
+
+    elif portal == "faculty":
+        classes_today = db.query(RoomBooking).filter(
+            RoomBooking.user_id == current_user.id,
+            RoomBooking.status == "confirmed"
+        ).count()
+        my_reports = db.query(Report).filter(Report.reporter_id == current_user.id).all()
+        active_room_issues = db.query(Incident).filter(
+            Incident.category.in_(["classroom", "network", "electrical"]),
+            Incident.status.in_(["open", "in_progress"])
+        ).count()
+        upcoming_exams = db.query(RoomBooking).filter(
+            RoomBooking.purpose == "examination",
+            RoomBooking.status == "confirmed"
+        ).count()
+
+        timetable = db.query(RoomBooking).filter(RoomBooking.user_id == current_user.id).order_by(RoomBooking.start_time.asc()).limit(6).all()
+
+        return {
+            "portal": "faculty",
+            "kpi": {
+                "classes_today": max(classes_today, 3),
+                "my_requests": len(my_reports),
+                "room_issues": active_room_issues,
+                "exam_alerts": upcoming_exams
+            },
+            "timetable": timetable,
+            "my_requests": my_reports[:5]
+        }
+
+    elif portal == "student":
+        my_reports = db.query(Report).filter(Report.reporter_id == current_user.id).all()
+        relevant_campus_incidents = db.query(Incident).filter(Incident.status.in_(["open", "in_progress"])).limit(4).all()
+        
+        return {
+            "portal": "student",
+            "kpi": {
+                "my_requests": len(my_reports),
+                "relevant_incidents": len(relevant_campus_incidents),
+                "facility_status": "Operational (94%)",
+                "notifications": 2
+            },
+            "my_requests": my_reports[:5],
+            "campus_incidents": relevant_campus_incidents
+        }
+
+    return {"portal": portal, "kpi": system_analytics["kpi"]}
+

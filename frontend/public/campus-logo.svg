@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60" fill="none">
+  <rect width="240" height="60" rx="12" fill="#345873"/>
+  <circle cx="36" cy="30" r="16" fill="#F29877" />
+  <path d="M26 30L34 22L46 34" stroke="#FFF4E9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="36" cy="30" r="5" fill="#FFD6BA"/>
+  <text x="64" y="38" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="800" fill="#FFF4E9" letter-spacing="1">CAMPUS<tspan fill="#F29877">OPS</tspan></text>
+</svg>
+
