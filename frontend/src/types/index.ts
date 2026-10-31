@@ -42,6 +42,12 @@ export interface Report {
   asset_id?: string;
   reporter_id: string;
   reporter_role: string;
+  reporter_name?: string;
+  building_name?: string;
+  room_number?: string;
+  room_name?: string;
+  asset_tag?: string;
+  asset_name?: string;
   source: string;
   status: string;
   incident_id?: string;
@@ -78,9 +84,13 @@ export interface Room {
   capacity: number;
   features?: string;
   status: 'available' | 'occupied' | 'under_maintenance' | 'unavailable';
-  daily_readiness_status: 'confirmed' | 'stale' | 'unconfirmed';
+  daily_readiness_status: 'confirmed_today' | 'stale' | 'unconfirmed' | 'unavailable';
   readiness_checked_at?: string;
   readiness_checked_by?: string;
+  freshness_state?: string;
+  last_confirmed_at?: string;
+  confirmed_by?: string;
+  freshness_source?: string;
   created_at: string;
 }
 
@@ -146,4 +156,3 @@ export interface KPICards {
   parts_shortages: number;
   pending_approvals?: number;
 }
-

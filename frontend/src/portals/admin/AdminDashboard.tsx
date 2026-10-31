@@ -16,7 +16,8 @@ import {
   ArrowRight,
   ShieldCheck,
   TrendingUp,
-  Cpu
+  Cpu,
+  Megaphone
 } from 'lucide-react';
 import {
   BarChart,
@@ -35,6 +36,11 @@ export const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [noticeTitle, setNoticeTitle] = useState('');
+  const [noticeMessage, setNoticeMessage] = useState('');
+  const [noticeType, setNoticeType] = useState('info');
+  const [noticePosting, setNoticePosting] = useState(false);
+  const [noticeFeedback, setNoticeFeedback] = useState('');
 
   useEffect(() => {
     loadDashboard();
@@ -48,6 +54,26 @@ export const AdminDashboard: React.FC = () => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePostNotice = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setNoticePosting(true);
+    setNoticeFeedback('');
+    try {
+      const result = await api.createBroadcastNotification({
+        title: noticeTitle.trim(),
+        message: noticeMessage.trim(),
+        type: noticeType,
+      });
+      setNoticeFeedback(`Announcement posted to ${result.recipient_count} active users.`);
+      setNoticeTitle('');
+      setNoticeMessage('');
+    } catch (err: any) {
+      setNoticeFeedback(`Could not post announcement: ${err.message}`);
+    } finally {
+      setNoticePosting(false);
     }
   };
 
@@ -221,6 +247,57 @@ export const AdminDashboard: React.FC = () => {
         />
       </div>
 
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
+        <div className="mb-4 flex items-center gap-2">
+          <Megaphone size={18} className="text-[#F29877]" />
+          <div>
+            <h2 className="text-sm font-extrabold text-[#345873]">Post campus announcement</h2>
+            <p className="text-[11px] text-gray-500">
+              This in-app notification will be visible to all active users.
+            </p>
+          </div>
+        </div>
+        <form onSubmit={handlePostNotice} className="grid gap-3 md:grid-cols-[1fr_180px]">
+          <input
+            required
+            maxLength={255}
+            value={noticeTitle}
+            onChange={(event) => setNoticeTitle(event.target.value)}
+            placeholder="Announcement title"
+            className="rounded-xl border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#345873]"
+          />
+          <select
+            value={noticeType}
+            onChange={(event) => setNoticeType(event.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+          >
+            <option value="info">Information</option>
+            <option value="warning">Warning</option>
+            <option value="critical">Critical</option>
+            <option value="action_required">Action required</option>
+          </select>
+          <textarea
+            required
+            maxLength={5000}
+            rows={3}
+            value={noticeMessage}
+            onChange={(event) => setNoticeMessage(event.target.value)}
+            placeholder="Write the announcement for the campus..."
+            className="rounded-xl border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#345873] md:col-span-2"
+          />
+          <div className="flex items-center justify-between gap-3 md:col-span-2">
+            <p role="status" className="text-xs font-semibold text-[#287D70]">{noticeFeedback}</p>
+            <button
+              type="submit"
+              disabled={noticePosting || !noticeTitle.trim() || !noticeMessage.trim()}
+              className="shrink-0 rounded-xl bg-[#345873] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#253f54] disabled:opacity-50"
+            >
+              {noticePosting ? 'Posting...' : 'Post to all users'}
+            </button>
+          </div>
+        </form>
+      </section>
+
       {/* Visual Analytics Row: Category Distribution & SLA Trend */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
@@ -352,4 +429,3 @@ export const AdminDashboard: React.FC = () => {
     </div>
   );
 };
-

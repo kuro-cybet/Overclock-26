@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
@@ -30,5 +30,11 @@ class ReportResponse(BaseModel):
     status: str
     incident_id: Optional[str] = None
     ai_extracted_meta: Optional[str] = None
+    reporter_name: Optional[str] = None
+    building_name: Optional[str] = None
+    room_number: Optional[str] = None
+    room_name: Optional[str] = None
+    asset_tag: Optional[str] = None
+    asset_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime

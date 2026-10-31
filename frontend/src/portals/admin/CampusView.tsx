@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../core/api/client';
 import { useAuth } from '../../core/auth/AuthProvider';
 import { DataTable } from '../../shared/components/DataTable';
@@ -14,11 +14,7 @@ export const CampusView: React.FC = () => {
   const [buildings, setBuildings] = useState<any[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<string>('');
 
-  useEffect(() => {
-    loadData();
-  }, [selectedBuilding]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [roomsData, bldData] = await Promise.all([
         api.getRooms(selectedBuilding ? `building_id=${selectedBuilding}` : ''),
@@ -29,7 +25,15 @@ export const CampusView: React.FC = () => {
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [selectedBuilding]);
+
+  useEffect(() => {
+    void loadData();
+    const refresh = window.setInterval(() => {
+      void loadData();
+    }, 15000);
+    return () => window.clearInterval(refresh);
+  }, [loadData]);
 
   const handleUpdateReadiness = async (roomId: string, newStatus: string) => {
     try {
@@ -79,14 +83,16 @@ export const CampusView: React.FC = () => {
                 onChange={(e) => handleUpdateReadiness(r.id, e.target.value)}
                 className="text-[10px] border border-slate-200 rounded px-1.5 py-0.5 bg-white text-gray-700 cursor-pointer"
               >
-                <option value="confirmed">Confirmed</option>
+                <option value="confirmed_today">Working</option>
+                <option value="confirmed">Working (legacy status)</option>
                 <option value="stale">Stale</option>
+                <option value="unavailable">Unavailable</option>
                 <option value="unconfirmed">Unconfirmed</option>
               </select>
             )}
           </div>
           <span className="text-[10px] text-gray-400">
-            Source: {r.freshness_source || 'inspection'} ({r.confirmed_by || 'Unsigned'})
+            Source: {r.freshness_source || 'inspection'} ({r.readiness_checked_by || r.confirmed_by || 'Unsigned'})
           </span>
         </div>
       )
@@ -108,7 +114,7 @@ export const CampusView: React.FC = () => {
         <div>
           <h1 className="text-2xl font-black text-[#345873]">Campus Facilities & Room Readiness</h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Monitor all 6 University Blocks, 18 Floors, 60 Classrooms & Labs with confirmed, stale, and unconfirmed indicators.
+            Monitor campus readiness and see technician QR inspections as they are recorded.
           </p>
         </div>
 
@@ -143,4 +149,3 @@ export const CampusView: React.FC = () => {
     </div>
   );
 };
-

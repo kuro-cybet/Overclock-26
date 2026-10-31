@@ -4,6 +4,9 @@ from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.report import Report
 from app.database.models.user import User
+from app.database.models.campus import Building
+from app.database.models.room import Room
+from app.database.models.asset import Asset
 from app.schemas.report import ReportCreate, ReportResponse
 from app.services.intake_service import intake_service
 from app.api.deps import get_current_user
@@ -69,7 +72,21 @@ def list_reports(
     """
     List reports visible to the active user.
     """
-    q = db.query(Report)
+    q = (
+        db.query(
+            Report,
+            User.name.label("reporter_name"),
+            Building.name.label("building_name"),
+            Room.room_number.label("room_number"),
+            Room.name.label("room_name"),
+            Asset.asset_tag.label("asset_tag"),
+            Asset.name.label("asset_name"),
+        )
+        .outerjoin(User, Report.reporter_id == User.id)
+        .outerjoin(Building, Report.building_id == Building.id)
+        .outerjoin(Room, Report.room_id == Room.id)
+        .outerjoin(Asset, Report.asset_id == Asset.id)
+    )
 
     # Scoping: Students & Faculty see only their submitted reports
     if current_user.role in ["student", "faculty"]:
@@ -78,8 +95,27 @@ def list_reports(
     if status:
         q = q.filter(Report.status == status)
 
-    reports = q.order_by(Report.created_at.desc()).limit(limit).all()
-    return reports
+    report_rows = q.order_by(Report.created_at.desc()).limit(limit).all()
+    return [
+        {
+            **ReportResponse.model_validate(report).model_dump(),
+            "reporter_name": reporter_name,
+            "building_name": building_name,
+            "room_number": room_number,
+            "room_name": room_name,
+            "asset_tag": asset_tag,
+            "asset_name": asset_name,
+        }
+        for (
+            report,
+            reporter_name,
+            building_name,
+            room_number,
+            room_name,
+            asset_tag,
+            asset_name,
+        ) in report_rows
+    ]
 
 @router.get(
     "/{report_id}",

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../core/api/client';
 import { useAuth } from '../../core/auth/AuthProvider';
 import { StatCard } from '../../shared/components/StatCard';
@@ -17,8 +17,10 @@ import {
   Package,
   AlertTriangle,
   CheckCircle2,
-  X
+  X,
+  QrCode
 } from 'lucide-react';
+import { RoomQrScanner } from '../../shared/components/RoomQrScanner';
 
 export const TechnicianDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -30,6 +32,10 @@ export const TechnicianDashboard: React.FC = () => {
   const [evidenceNotes, setEvidenceNotes] = useState('');
   const [savingTask, setSavingTask] = useState(false);
   const [historicalCases, setHistoricalCases] = useState<any[]>([]);
+  const [roomScannerOpen, setRoomScannerOpen] = useState(false);
+  const [scannedRoom, setScannedRoom] = useState<any | null>(null);
+  const [readinessSaving, setReadinessSaving] = useState(false);
+  const [readinessMessage, setReadinessMessage] = useState('');
 
   // Parts requisition modal state
   const [partsModalOpen, setPartsModalOpen] = useState(false);
@@ -165,6 +171,41 @@ export const TechnicianDashboard: React.FC = () => {
     }
   };
 
+  const handleRoomQrScan = useCallback(async (value: string) => {
+    const match = value.trim().match(/^(?:campusops-asset:)?([a-z0-9_-]+)$/i);
+    setRoomScannerOpen(false);
+    if (!match) {
+      setReadinessMessage('This QR code does not contain a valid device asset tag.');
+      return;
+    }
+
+    try {
+      const asset = await api.getAssetByTag(match[1]);
+      const room = await api.getRoomById(asset.room_id);
+      setScannedRoom({ ...room, scanned_asset: asset });
+      setReadinessMessage('');
+    } catch (err: any) {
+      setReadinessMessage(`Could not find the scanned device: ${err.message}`);
+    }
+  }, []);
+
+  const handleRoomReadinessUpdate = async (status: string) => {
+    if (!scannedRoom) return;
+    setReadinessSaving(true);
+    setReadinessMessage('');
+    try {
+      const room = await api.updateRoomReadiness(scannedRoom.id, status);
+      setScannedRoom(room);
+      setReadinessMessage(
+        `${room.room_number} readiness saved as ${status.replace(/_/g, ' ')}.`
+      );
+    } catch (err: any) {
+      setReadinessMessage(`Could not save room readiness: ${err.message}`);
+    } finally {
+      setReadinessSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="py-20 text-center">
@@ -265,6 +306,76 @@ export const TechnicianDashboard: React.FC = () => {
         <StatCard title="Completed Today" value={kpi.completed} icon={<CheckCircle size={20} />} accentColor="tech" />
         <StatCard title="Blocked on Parts" value={kpi.blocked} icon={<AlertOctagon size={20} />} accentColor="admin" />
       </div>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#345873]">
+              <QrCode size={17} className="text-[#287D70]" />
+              Daily room readiness scan
+            </h2>
+            <p className="mt-1 text-xs text-gray-500">
+              Scan the QR sticker attached to a device in the classroom, inspect the room, then record whether it is working, stale, or unavailable.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setReadinessMessage('');
+              setScannedRoom(null);
+              setRoomScannerOpen((open) => !open);
+            }}
+            className="rounded-xl bg-[#287D70] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#1f5f55]"
+          >
+            {roomScannerOpen ? 'Close scanner' : 'Scan room QR'}
+          </button>
+        </div>
+
+        {roomScannerOpen && (
+          <div className="mt-4 max-w-md overflow-hidden rounded-2xl border border-slate-200 p-3">
+            <RoomQrScanner onScan={handleRoomQrScan} />
+          </div>
+        )}
+
+        {scannedRoom && (
+          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-bold text-gray-800">
+                {scannedRoom.room_number} · {scannedRoom.name}
+              </p>
+              <p className="mt-0.5 text-xs text-gray-600">
+                Scanned device: {scannedRoom.scanned_asset.name} ({scannedRoom.scanned_asset.asset_tag})
+              </p>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Current status: {String(scannedRoom.daily_readiness_status).replace(/_/g, ' ')}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                ['confirmed_today', 'Working'],
+                ['stale', 'Stale'],
+                ['unavailable', 'Unavailable'],
+              ].map(([status, label]) => (
+                <button
+                  key={status}
+                  type="button"
+                  disabled={readinessSaving}
+                  onClick={() => handleRoomReadinessUpdate(status)}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-[#345873] transition hover:border-[#287D70] hover:text-[#287D70] disabled:opacity-50"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {readinessMessage && (
+          <p role="status" className="mt-3 text-xs font-semibold text-[#345873]">
+            {readinessMessage}
+          </p>
+        )}
+      </section>
 
       {/* Active Work Order Action Panel */}
       {activeTask && (
