@@ -1,3 +1,4 @@
+import { formatINR } from '../../shared/utils/currency';
 import React, { useState, useEffect } from 'react';
 import { api } from '../../core/api/client';
 import { DataTable } from '../../shared/components/DataTable';
@@ -92,7 +93,7 @@ export const InventoryView: React.FC = () => {
     {
       header: 'Unit Cost',
       accessor: 'unit_cost' as const,
-      render: (r: any) => <span className="font-mono">${Number(r.unit_cost || 0).toFixed(2)}</span>
+      render: (r: any) => <span className="font-mono">{formatINR(r.unit_cost)}</span>
     },
     {
       header: 'Action',
@@ -155,7 +156,7 @@ export const InventoryView: React.FC = () => {
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-[#345873] focus:outline-none"
                 />
                 <span className="text-[11px] text-gray-500 mt-1 block">
-                  Total Estimated Cost: ${Number(procureQty * (selectedItem?.unit_cost || 0)).toFixed(2)}
+                  Total Estimated Cost: {formatINR(procureQty * (selectedItem?.unit_cost || 0))}
                 </span>
               </div>
 
@@ -192,4 +193,5 @@ export const InventoryView: React.FC = () => {
     </div>
   );
 };
+
 

@@ -1,211 +1,385 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { api } from '../../core/api/client';
 import { DataTable } from '../../shared/components/DataTable';
 import { StatusBadge } from '../../shared/components/StatusBadge';
-import { Bus, Home, MapPin, Clock, Phone, AlertTriangle } from 'lucide-react';
-
-const BUS_ROUTES = [
-  { id: 'rt-01', route: 'Route 1 — City Centre Loop', stops: 'Main Gate → City Mall → Central Station → Main Gate', timing: '07:30 / 17:30 / 20:00', seats: 50, available: 12, status: 'on_time' },
-  { id: 'rt-02', route: 'Route 2 — North District', stops: 'Main Gate → Riverside → North Park → Uptown', timing: '07:00 / 17:00 / 19:30', seats: 45, available: 0, status: 'full' },
-  { id: 'rt-03', route: 'Route 3 — South Residential', stops: 'Main Gate → Garden Colony → South Market → Lake View', timing: '07:15 / 17:15 / 20:30', seats: 40, available: 7, status: 'on_time' },
-  { id: 'rt-04', route: 'Route 4 — Airport Express', stops: 'Main Gate → Highway Junction → Airport Terminal', timing: '05:30 / 22:00', seats: 30, available: 18, status: 'on_time' },
-  { id: 'rt-05', route: 'Route 5 — East Suburbs', stops: 'Main Gate → Tech Park → East Colony → Old Town', timing: '07:45 / 17:45', seats: 40, available: 3, status: 'delayed' },
-];
+import {
+  Bus,
+  Home,
+  MapPin,
+  Clock,
+  Phone,
+  AlertTriangle,
+  Search,
+  RefreshCw,
+  ShieldCheck,
+  Megaphone,
+  User
+} from 'lucide-react';
 
 const HOSTEL_BLOCKS = [
-  { id: 'h-A', block: 'Block A (Boys)', warden: 'Mr. Rajan Kumar', contact: '+91-9001-000-1A', rooms: 80, occupied: 78, facilities: 'Wi-Fi, Laundry, Common Room, 24h Security', status: 'available' },
-  { id: 'h-B', block: 'Block B (Boys)', warden: 'Mr. Suresh Pillai', contact: '+91-9001-000-1B', rooms: 80, occupied: 80, facilities: 'Wi-Fi, Laundry, Gym, CCTV', status: 'full' },
-  { id: 'h-C', block: 'Block C (Girls)', warden: 'Ms. Priya Menon', contact: '+91-9001-000-1C', rooms: 60, occupied: 55, facilities: 'Wi-Fi, Laundry, Common Room, Biometric Entry', status: 'available' },
-  { id: 'h-D', block: 'Block D (Girls)', warden: 'Ms. Anita Sharma', contact: '+91-9001-000-1D', rooms: 60, occupied: 60, facilities: 'Wi-Fi, Laundry, Common Room, 24h Security', status: 'full' },
-  { id: 'h-E', block: 'Block E (Mixed PG)', warden: 'Dr. Kavya Nair', contact: '+91-9001-000-1E', rooms: 40, occupied: 30, facilities: 'Wi-Fi, AC Rooms, Study Hall, Cafeteria', status: 'available' },
+  { id: 'h-A', block: 'Cauvery Block (Men)', warden: 'Dr. K. Ramanathan', contact: '+91 94441 12345', rooms: 120, occupied: 114, facilities: 'Wi-Fi, High-Speed LAN, Laundry, 24h Generator', status: 'available' },
+  { id: 'h-B', block: 'Krishna Block (Men)', warden: 'Prof. M. Selvam', contact: '+91 94442 23456', rooms: 120, occupied: 120, facilities: 'Wi-Fi, Study Hall, Solar Hot Water, CCTV', status: 'full' },
+  { id: 'h-C', block: 'Vaigai Block (Women)', warden: 'Dr. S. Meenakshi', contact: '+91 94443 34567', rooms: 100, occupied: 92, facilities: 'Biometric Access, Reading Room, 24h Guard, Medical Bay', status: 'available' },
+  { id: 'h-D', block: 'Bhavani Block (Women)', warden: 'Ms. R. Radhika', contact: '+91 94444 45678', rooms: 100, occupied: 100, facilities: 'Wi-Fi, Gymnasium, Laundry Facility, Cafeteria', status: 'full' },
+  { id: 'h-E', block: 'Palar Block (PG & Research)', warden: 'Dr. T. Venkataraman', contact: '+91 94445 56789', rooms: 60, occupied: 48, facilities: 'AC Accommodations, High-Bandwidth Gigabit LAN, Quiet Zone', status: 'available' },
 ];
 
 const MY_HOSTEL = {
-  block: 'Block C (Girls)',
-  room: 'C-214',
-  roommate: 'Aisha Patel',
-  warden: 'Ms. Priya Menon',
-  contact: '+91-9001-000-1C',
+  block: 'Vaigai Block (Women)',
+  room: 'V-304',
+  roommate: 'Divya Sundaram',
+  warden: 'Dr. S. Meenakshi',
+  contact: '+91 94443 34567',
   checkIn: '2026-07-15',
   checkOut: '2027-05-30',
   status: 'confirmed',
-  rent: '₹8,500/month',
-  messPlan: 'Full Board (Breakfast + Lunch + Dinner)',
+  rent: '₹9,500/month',
+  messPlan: 'South Indian Veg & Non-Veg Multi-Cuisine',
 };
-
-const COMPLAINTS = [
-  { id: 'hc-001', category: 'Maintenance', description: 'Ceiling fan not working in C-214', raised: '2026-10-25', status: 'in_progress' },
-  { id: 'hc-002', category: 'Cleanliness', description: 'Common bathroom floor needs cleaning', raised: '2026-10-28', status: 'resolved' },
-];
 
 export const StudentTransportHostelView: React.FC = () => {
   const [tab, setTab] = useState<'transport' | 'hostel'>('transport');
+  const [routes, setRoutes] = useState<any[]>([]);
+  const [allocation, setAllocation] = useState<any>(null);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [selectedRoute, setSelectedRoute] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const busCols = [
-    { header: 'Route', accessor: 'route' as const, render: (r: any) => <span className="font-bold text-sm text-[#345873]">{r.route}</span> },
-    { header: 'Key Stops', accessor: 'stops' as const, render: (r: any) => <span className="text-xs text-gray-500 line-clamp-1">{r.stops}</span> },
-    { header: 'Timings', accessor: 'timing' as const, render: (r: any) => <span className="text-xs font-mono text-gray-600">{r.timing}</span> },
-    {
-      header: 'Seats Available', accessor: 'available' as const,
-      render: (r: any) => (
-        <span className={`text-xs font-bold ${r.available === 0 ? 'text-red-500' : r.available < 5 ? 'text-amber-500' : 'text-emerald-600'}`}>
-          {r.available} / {r.seats}
-        </span>
-      )
-    },
-    { header: 'Status', accessor: 'status' as const, render: (r: any) => <StatusBadge status={r.status} /> },
-  ];
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const hostelCols = [
-    { header: 'Block', accessor: 'block' as const, render: (r: any) => <span className="font-bold text-sm text-[#345873]">{r.block}</span> },
-    { header: 'Warden', accessor: 'warden' as const, render: (r: any) => <span className="text-xs text-gray-600">{r.warden}</span> },
-    { header: 'Contact', accessor: 'contact' as const, render: (r: any) => <span className="font-mono text-xs text-gray-500">{r.contact}</span> },
-    {
-      header: 'Occupancy', accessor: 'occupied' as const,
-      render: (r: any) => {
-        const pct = Math.round((r.occupied / r.rooms) * 100);
-        return (
-          <div className="flex items-center space-x-2">
-            <div className="flex-1 bg-slate-100 rounded-full h-1.5 w-16">
-              <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, backgroundColor: pct >= 100 ? '#ef4444' : '#10b981' }} />
-            </div>
-            <span className="text-xs font-bold text-gray-500">{r.occupied}/{r.rooms}</span>
-          </div>
-        );
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [routesData, allocData, annData] = await Promise.all([
+        api.getTransportRoutes(),
+        api.getMyTransportAssignment(),
+        api.getTransportAnnouncements()
+      ]);
+      setRoutes(routesData);
+      setAllocation(allocData?.allocation || null);
+      setAnnouncements(annData);
+      if (routesData.length > 0 && !selectedRoute) {
+        setSelectedRoute(routesData[0]);
       }
-    },
-    { header: 'Status', accessor: 'status' as const, render: (r: any) => <StatusBadge status={r.status} /> },
-  ];
+    } catch (err) {
+      console.error('Failed to load transport data', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const complaintCols = [
-    { header: 'Category', accessor: 'category' as const, render: (r: any) => <span className="font-bold text-xs text-gray-700">{r.category}</span> },
-    { header: 'Description', accessor: 'description' as const, render: (r: any) => <span className="text-xs text-gray-500">{r.description}</span> },
-    { header: 'Raised', accessor: 'raised' as const, render: (r: any) => <span className="font-mono text-xs text-gray-400">{r.raised}</span> },
-    { header: 'Status', accessor: 'status' as const, render: (r: any) => <StatusBadge status={r.status} /> },
-  ];
+  const filteredRoutes = routes.filter((r) => {
+    const s = search.toLowerCase();
+    return (
+      r.route_number.toLowerCase().includes(s) ||
+      r.route_name.toLowerCase().includes(s) ||
+      r.origin.toLowerCase().includes(s) ||
+      (r.stops && r.stops.some((st: any) => st.stop_name.toLowerCase().includes(s)))
+    );
+  });
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center space-x-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
-        <div className="w-12 h-12 rounded-2xl bg-[#F29877]/15 text-[#F29877] flex items-center justify-center">
-          {tab === 'transport' ? <Bus size={24} /> : <Home size={24} />}
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
+        <div className="flex items-center space-x-4">
+          <div className="w-12 h-12 rounded-2xl bg-[#F29877]/15 text-[#F29877] flex items-center justify-center shrink-0">
+            {tab === 'transport' ? <Bus size={24} /> : <Home size={24} />}
+          </div>
+          <div>
+            <h1 className="text-2xl font-black text-[#345873]">Campus Transport & Residential Services</h1>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Chennai metropolitan bus routes, scheduled boarding stops, transport passes, and hostel blocks.
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-black text-[#345873]">Transport & Hostel</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Campus bus routes, hostel allocations and facility info</p>
-        </div>
-      </div>
 
-      {/* Demonstration Dataset Banner */}
-      <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-xs text-amber-900">
-        <span className="px-2 py-0.5 rounded-md bg-amber-200 font-black text-[10px] tracking-wide text-amber-900 shrink-0">
-          DEMONSTRATION DATASET
-        </span>
-        <p>
-          Bus shuttle schedules, seat capacity trackers, and hostel room assignments shown below are demonstration datasets for campus logistics.
-        </p>
-      </div>
+        <div className="flex items-center space-x-2">
+          <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
+            <button
+              onClick={() => setTab('transport')}
+              className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                tab === 'transport' ? 'bg-[#345873] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Bus size={14} />
+              <span>Chennai Transit Routes</span>
+            </button>
+            <button
+              onClick={() => setTab('hostel')}
+              className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                tab === 'hostel' ? 'bg-[#345873] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Home size={14} />
+              <span>Campus Hostels</span>
+            </button>
+          </div>
 
-      {/* Tabs */}
-      <div className="flex space-x-2">
-        {(['transport', 'hostel'] as const).map((t) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex items-center space-x-2 px-5 py-2 rounded-full text-xs font-bold transition capitalize ${
-              tab === t ? 'bg-[#345873] text-white shadow' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-            }`}
+            onClick={loadData}
+            className="p-2.5 bg-white border border-slate-200 text-gray-600 rounded-2xl hover:bg-gray-50 transition cursor-pointer shadow-xs"
+            title="Refresh"
           >
-            {t === 'transport' ? <Bus size={14} /> : <Home size={14} />}
-            <span>{t === 'transport' ? 'Campus Transport' : 'Hostel'}</span>
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
-        ))}
+        </div>
       </div>
 
+      {/* TAB 1: TRANSPORT */}
       {tab === 'transport' && (
-        <>
-          {/* Alert */}
-          <div className="flex items-center space-x-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
-            <AlertTriangle size={16} className="text-amber-500 shrink-0" />
-            <p className="text-xs text-amber-700 font-semibold">Route 5 is currently running 15 minutes late due to highway maintenance near East Suburbs junction.</p>
-          </div>
-
-          {/* Bus Routes Table */}
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100">
-              <h3 className="font-extrabold text-sm text-[#345873]">Campus Bus Routes & Seat Availability</h3>
-            </div>
-            <div className="p-4">
-              <DataTable columns={busCols} data={BUS_ROUTES} keyField="id" emptyMessage="No routes available." />
-            </div>
-          </div>
-
-          {/* Info Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[
-              { icon: <MapPin size={18} />, title: 'Bus Pick-up Point', body: 'All campus buses depart from Gate 1 (Main Entrance). Please be at the stop 5 minutes before scheduled time.' },
-              { icon: <Clock size={18} />, title: 'Late Night Return', body: 'Special late-night return buses run at 22:00 from City Centre on Fri/Sat. Pre-booking required via the transport office.' },
-              { icon: <Phone size={18} />, title: 'Transport Office', body: 'Block A, Ground Floor. Phone: +91-9001-TRANS. Email: transport@campusops.edu. Open 8 AM – 6 PM, Mon–Sat.' },
-            ].map((card, i) => (
-              <div key={i} className="bg-white rounded-3xl border border-slate-200 shadow-xs p-5">
-                <div className="w-9 h-9 rounded-xl bg-[#345873]/10 text-[#345873] flex items-center justify-center mb-3">{card.icon}</div>
-                <h4 className="font-bold text-sm text-gray-800 mb-1">{card.title}</h4>
-                <p className="text-xs text-gray-500 leading-relaxed">{card.body}</p>
+        <div className="space-y-6">
+          {/* Active Announcements */}
+          {announcements.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-3xl p-4 flex items-start space-x-3 text-amber-900">
+              <Megaphone size={20} className="text-amber-700 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-extrabold text-xs uppercase tracking-wider">{announcements[0].title}</h4>
+                <p className="text-xs text-amber-800 mt-0.5">{announcements[0].message}</p>
               </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {tab === 'hostel' && (
-        <>
-          {/* My Allocation Card */}
-          <div className="bg-white rounded-3xl border border-[#345873]/30 shadow-xs p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-extrabold text-sm text-[#345873]">My Hostel Allocation</h3>
-              <StatusBadge status={MY_HOSTEL.status} />
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-              {[
-                { label: 'Block', value: MY_HOSTEL.block },
-                { label: 'Room No.', value: MY_HOSTEL.room },
-                { label: 'Roommate', value: MY_HOSTEL.roommate },
-                { label: 'Warden', value: MY_HOSTEL.warden },
-                { label: 'Check-in', value: MY_HOSTEL.checkIn },
-                { label: 'Check-out', value: MY_HOSTEL.checkOut },
-                { label: 'Monthly Rent', value: MY_HOSTEL.rent },
-                { label: 'Mess Plan', value: MY_HOSTEL.messPlan },
-              ].map((item, i) => (
-                <div key={i}>
-                  <p className="text-gray-400 font-semibold uppercase tracking-wide text-[10px]">{item.label}</p>
-                  <p className="font-bold text-gray-700 mt-0.5">{item.value}</p>
+          )}
+
+          {/* MY TRANSPORT ALLOCATION CARD */}
+          {allocation && (
+            <div className="bg-gradient-to-r from-[#287D70] to-[#345873] rounded-3xl p-6 text-white shadow-md">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#FFD6BA] block mb-1">
+                My Official Transport Allocation • Term 2026-2027
+              </span>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                <div>
+                  <h3 className="text-base font-extrabold">{allocation.route?.route_name}</h3>
+                  <span className="font-mono text-xs text-emerald-200 font-bold block mt-0.5">
+                    Route Code: {allocation.route?.route_number} • Bus: {allocation.route?.vehicle_number}
+                  </span>
+                  <p className="text-xs text-slate-200 mt-1">
+                    Driver: {allocation.route?.driver_name} ({allocation.route?.driver_phone})
+                  </p>
+                </div>
+
+                <div className="p-3 bg-white/10 rounded-2xl border border-white/15">
+                  <span className="text-[10px] uppercase font-bold text-slate-300 block">Designated Boarding Stop</span>
+                  <span className="font-extrabold text-sm text-white block mt-0.5">{allocation.stop?.stop_name}</span>
+                  <span className="text-xs text-slate-200 font-mono">
+                    Pickup: {allocation.stop?.pickup_time} • Drop: {allocation.stop?.drop_time}
+                  </span>
+                </div>
+
+                <div className="flex flex-col justify-center items-start md:items-end">
+                  <span className="px-3 py-1 bg-emerald-400 text-emerald-950 rounded-full font-black text-xs uppercase tracking-wider">
+                    {allocation.status} Pass • {allocation.fee_status}
+                  </span>
+                  <span className="text-[10px] text-slate-300 mt-1.5">Show QR code or digital ID to coach attender</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Search bar */}
+          <div className="relative max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search Chennai stops or hubs (e.g. Tambaram, Guindy, Velachery, Porur)..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#345873] shadow-xs transition"
+            />
+          </div>
+
+          {/* Routes Grid & Stops Expansion */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Route List */}
+            <div className="lg:col-span-1 space-y-3">
+              <h2 className="text-sm font-extrabold text-[#345873] uppercase tracking-wider">
+                Available Campus Bus Routes ({filteredRoutes.length})
+              </h2>
+              {filteredRoutes.map((r) => (
+                <div
+                  key={r.id}
+                  onClick={() => setSelectedRoute(r)}
+                  className={`p-4 rounded-3xl border transition cursor-pointer shadow-xs ${
+                    selectedRoute?.id === r.id
+                      ? 'bg-[#FFF4E9] border-[#F29877] ring-1 ring-[#F29877]'
+                      : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-mono font-bold text-xs px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                      {r.route_number}
+                    </span>
+                    <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full capitalize">
+                      {r.status}
+                    </span>
+                  </div>
+                  <h3 className="font-black text-[#345873] text-sm leading-tight">{r.route_name}</h3>
+                  <p className="text-xs text-gray-500 mt-1 line-clamp-1">
+                    {r.origin} ➔ {r.destination}
+                  </p>
+                  <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-gray-500">
+                    <span>{r.operating_days}</span>
+                    <span>{r.capacity} Seats • {r.stops?.length || 0} Stops</span>
+                  </div>
                 </div>
               ))}
             </div>
+
+            {/* Selected Route Detailed Stop Timings */}
+            <div className="lg:col-span-2">
+              {selectedRoute ? (
+                <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-mono font-black text-sm text-[#345873] bg-[#FFF4E9] px-2.5 py-1 rounded-xl">
+                          {selectedRoute.route_number}
+                        </span>
+                        <h2 className="text-lg font-black text-[#345873]">{selectedRoute.route_name}</h2>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Vehicle No: <span className="font-mono font-bold text-gray-800">{selectedRoute.vehicle_number}</span> • Driver: <span className="font-bold text-gray-800">{selectedRoute.driver_name}</span> ({selectedRoute.driver_phone})
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-xs font-bold text-slate-500 block">Scheduled Bus Line</span>
+                      <span className="text-[11px] text-emerald-600 font-bold uppercase tracking-wider">Fixed Punctual Service</span>
+                    </div>
+                  </div>
+
+                  {selectedRoute.announcement && (
+                    <div className="p-3.5 bg-blue-50/70 border border-blue-100 rounded-2xl text-xs text-blue-900 font-medium">
+                      {selectedRoute.announcement}
+                    </div>
+                  )}
+
+                  {/* Stops Sequence Flow */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-400">
+                      Sequential Stop Schedule & Pick-up/Drop Timings
+                    </h3>
+
+                    <div className="space-y-3 relative before:absolute before:left-4 before:top-4 before:bottom-4 before:w-0.5 before:bg-slate-200">
+                      {(selectedRoute.stops || []).map((stop: any, idx: number) => (
+                        <div key={stop.id || idx} className="relative flex items-start space-x-4 pl-1">
+                          <div className="w-6 h-6 rounded-full bg-[#345873] text-white flex items-center justify-center text-[10px] font-black shrink-0 z-10 shadow-xs">
+                            {stop.sequence_order}
+                          </div>
+                          <div className="flex-1 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <span className="font-extrabold text-xs text-gray-800 block">{stop.stop_name}</span>
+                              {stop.landmark && (
+                                <span className="text-[11px] text-gray-400">{stop.landmark}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center space-x-3 text-xs font-mono font-bold text-[#345873] shrink-0">
+                              <span className="bg-white px-2.5 py-1 rounded-xl border border-slate-200">
+                                AM: {stop.pickup_time}
+                              </span>
+                              <span className="bg-white px-2.5 py-1 rounded-xl border border-slate-200">
+                                PM: {stop.drop_time}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-3xl p-10 border border-slate-200 text-center text-gray-400 text-sm">
+                  Select a route from the list to view its complete Chennai stop schedule.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: HOSTEL */}
+      {tab === 'hostel' && (
+        <div className="space-y-6">
+          {/* Student's Current Hostel Allocation */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
+            <h2 className="text-base font-extrabold text-[#345873] mb-4">My Residential Allocation</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+              <div className="p-4 bg-slate-50 rounded-2xl">
+                <span className="text-gray-400 font-bold block">Assigned Hostel</span>
+                <span className="text-sm font-extrabold text-[#345873] mt-0.5 block">{MY_HOSTEL.block}</span>
+                <span className="text-gray-500 text-[11px]">Room {MY_HOSTEL.room}</span>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-2xl">
+                <span className="text-gray-400 font-bold block">Roommate</span>
+                <span className="text-sm font-extrabold text-gray-800 mt-0.5 block">{MY_HOSTEL.roommate}</span>
+                <span className="text-gray-500 text-[11px]">Enrolled Student</span>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-2xl">
+                <span className="text-gray-400 font-bold block">Resident Warden</span>
+                <span className="text-sm font-extrabold text-gray-800 mt-0.5 block">{MY_HOSTEL.warden}</span>
+                <span className="text-gray-500 font-mono text-[11px]">{MY_HOSTEL.contact}</span>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-2xl">
+                <span className="text-gray-400 font-bold block">Mess & Boarding</span>
+                <span className="text-sm font-extrabold text-emerald-700 mt-0.5 block">{MY_HOSTEL.rent}</span>
+                <span className="text-gray-500 text-[11px]">{MY_HOSTEL.messPlan}</span>
+              </div>
+            </div>
           </div>
 
-          {/* All Blocks */}
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100">
-              <h3 className="font-extrabold text-sm text-[#345873]">All Hostel Blocks — Occupancy Overview</h3>
-            </div>
-            <div className="p-4">
-              <DataTable columns={hostelCols} data={HOSTEL_BLOCKS} keyField="id" emptyMessage="No hostel data." />
-            </div>
+          {/* Campus Hostels Table */}
+          <div className="space-y-3">
+            <h2 className="text-base font-extrabold text-[#345873]">Campus Residential Hostels</h2>
+            <DataTable
+              columns={[
+                {
+                  header: 'Hostel Block',
+                  accessor: 'block' as const,
+                  render: (r: any) => <span className="font-extrabold text-sm text-[#345873]">{r.block}</span>
+                },
+                {
+                  header: 'Resident Warden',
+                  accessor: 'warden' as const,
+                  render: (r: any) => (
+                    <div>
+                      <span className="font-bold text-xs text-gray-800 block">{r.warden}</span>
+                      <span className="font-mono text-[10px] text-gray-400">{r.contact}</span>
+                    </div>
+                  )
+                },
+                {
+                  header: 'Facilities & Security',
+                  accessor: 'facilities' as const,
+                  render: (r: any) => <span className="text-xs text-gray-500">{r.facilities}</span>
+                },
+                {
+                  header: 'Occupancy',
+                  render: (r: any) => {
+                    const pct = Math.round((r.occupied / r.rooms) * 100);
+                    return (
+                      <div className="flex items-center space-x-2">
+                        <div className="w-16 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                          <div className={`h-1.5 rounded-full ${pct >= 100 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-xs font-mono font-bold text-gray-600">{r.occupied}/{r.rooms}</span>
+                      </div>
+                    );
+                  }
+                },
+                {
+                  header: 'Status',
+                  accessor: 'status' as const,
+                  render: (r: any) => <StatusBadge status={r.status} />
+                }
+              ]}
+              data={HOSTEL_BLOCKS}
+              keyField="id"
+            />
           </div>
-
-          {/* My Complaints */}
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100">
-              <h3 className="font-extrabold text-sm text-[#345873]">My Hostel Complaints</h3>
-            </div>
-            <div className="p-4">
-              <DataTable columns={complaintCols} data={COMPLAINTS} keyField="id" emptyMessage="No complaints raised." />
-            </div>
-          </div>
-        </>
+        </div>
       )}
     </div>
   );
 };
-

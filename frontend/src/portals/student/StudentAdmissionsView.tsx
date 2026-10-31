@@ -87,15 +87,6 @@ export const StudentAdmissionsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Demonstration Dataset Banner */}
-      <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-xs text-amber-900">
-        <span className="px-2 py-0.5 rounded-md bg-amber-200 font-black text-[10px] tracking-wide text-amber-900 shrink-0">
-          DEMONSTRATION DATASET
-        </span>
-        <p>
-          Programme listings, document verification requirements, and academic intake timelines shown below are demonstration datasets for admissions testing.
-        </p>
-      </div>
 
       {/* Admission Timeline */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6">

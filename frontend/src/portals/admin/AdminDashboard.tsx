@@ -1,3 +1,4 @@
+import { formatINR } from '../../shared/utils/currency';
 import React, { useState, useEffect } from 'react';
 import { api } from '../../core/api/client';
 import { useAuth } from '../../core/auth/AuthProvider';
@@ -318,7 +319,7 @@ export const AdminDashboard: React.FC = () => {
                 </div>
                 <div className="text-right">
                   <span className="font-mono font-bold text-[#345873] text-sm block">
-                    ${Number(app.cost_amount || 0).toFixed(2)}
+                    {formatINR(app.cost_amount)}
                   </span>
                   <span className="text-[10px] text-amber-700 font-bold uppercase">Pending Decision</span>
                 </div>
@@ -330,5 +331,6 @@ export const AdminDashboard: React.FC = () => {
     </div>
   );
 };
+
 
 

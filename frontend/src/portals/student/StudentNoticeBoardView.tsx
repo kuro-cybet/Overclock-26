@@ -118,15 +118,6 @@ export const StudentNoticeBoardView: React.FC = () => {
         </div>
       </div>
 
-      {/* Demonstration Dataset Banner */}
-      <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-xs text-amber-900">
-        <span className="px-2 py-0.5 rounded-md bg-amber-200 font-black text-[10px] tracking-wide text-amber-900 shrink-0">
-          DEMONSTRATION DATASET
-        </span>
-        <p>
-          The campus bulletins and announcement items listed below are simulated for demonstration and preview purposes. Live system alerts are delivered via your real-time notification feed.
-        </p>
-      </div>
 
       {/* Filter Bar */}
       <div className="flex items-center space-x-2">

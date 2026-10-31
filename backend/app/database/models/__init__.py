@@ -33,6 +33,25 @@ from app.database.models.explanation import DecisionExplanation
 # WhatsApp AI Assistant Models
 from app.database.models.whatsapp import WhatsAppUserLink, WhatsAppConversation, WhatsAppMessageLog, WhatsAppSession
 
+# Academic Timetable & Attendance Models
+from app.database.models.academic import (
+    Course,
+    AcademicSection,
+    TimetableSlot,
+    StudentEnrollment,
+    ClassSession,
+    AttendanceRecord,
+    AttendanceCorrectionRequest,
+)
+
+# Chennai Campus Transport Models
+from app.database.models.transport import (
+    TransportRoute,
+    TransportStop,
+    TransportAllocation,
+    TransportAnnouncement,
+)
+
 __all__ = [
     "User",
     "Building",
@@ -76,4 +95,17 @@ __all__ = [
     "WhatsAppConversation",
     "WhatsAppMessageLog",
     "WhatsAppSession",
+    # Academic
+    "Course",
+    "AcademicSection",
+    "TimetableSlot",
+    "StudentEnrollment",
+    "ClassSession",
+    "AttendanceRecord",
+    "AttendanceCorrectionRequest",
+    # Transport
+    "TransportRoute",
+    "TransportStop",
+    "TransportAllocation",
+    "TransportAnnouncement",
 ]

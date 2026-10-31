@@ -19,6 +19,8 @@ import { ScenarioSimulatorView } from '../portals/admin/ScenarioSimulatorView';
 import { AnalyticsView } from '../portals/admin/AnalyticsView';
 import { OperationalIntelligenceView } from '../portals/admin/OperationalIntelligenceView';
 import { PredictiveMaintenanceView } from '../portals/admin/PredictiveMaintenanceView';
+import { AdminTimetableManagementView } from '../portals/admin/AdminTimetableManagementView';
+import { AdminTransportManagementView } from '../portals/admin/AdminTransportManagementView';
 
 // Technician Pages
 import { TechnicianDashboard } from '../portals/technician/TechnicianDashboard';
@@ -29,6 +31,7 @@ import { FacultyTimetableView } from '../portals/faculty/FacultyTimetableView';
 import { FacultyRequestsView } from '../portals/faculty/FacultyRequestsView';
 import { FacultyExamSupportView } from '../portals/faculty/FacultyExamSupportView';
 import { FacultyNoticesView } from '../portals/faculty/FacultyNoticesView';
+import { FacultyTransportView } from '../portals/faculty/FacultyTransportView';
 
 // Student Pages
 import { StudentDashboard } from '../portals/student/StudentDashboard';
@@ -36,6 +39,8 @@ import { StudentNoticeBoardView } from '../portals/student/StudentNoticeBoardVie
 import { StudentAdmissionsView } from '../portals/student/StudentAdmissionsView';
 import { StudentTransportHostelView } from '../portals/student/StudentTransportHostelView';
 import { StudentMyLearningView } from '../portals/student/StudentMyLearningView';
+import { StudentTimetableView } from '../portals/student/StudentTimetableView';
+import { StudentAttendanceView } from '../portals/student/StudentAttendanceView';
 
 /** Everyone lands directly in the only portal their role can use. */
 function HomeRedirect() {
@@ -128,6 +133,22 @@ export const router = createBrowserRouter([
             )
           },
           {
+            path: 'timetable',
+            element: (
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['system_admin', 'department_manager', 'facilities_admin']}>
+                <AdminTimetableManagementView />
+              </RoleGuard>
+            )
+          },
+          {
+            path: 'transport',
+            element: (
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['system_admin', 'facilities_admin']}>
+                <AdminTransportManagementView />
+              </RoleGuard>
+            )
+          },
+          {
             path: 'simulations',
             element: (
               <RoleGuard allowedRoles={['admin']} allowedSubRoles={['system_admin']}>
@@ -184,6 +205,7 @@ export const router = createBrowserRouter([
           { path: 'timetable', element: <FacultyTimetableView /> },
           { path: 'requests', element: <FacultyRequestsView /> },
           { path: 'exam-support', element: <FacultyExamSupportView /> },
+          { path: 'transport', element: <FacultyTransportView /> },
           { path: 'notices', element: <FacultyNoticesView /> }
         ]
       },
@@ -199,12 +221,15 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <StudentDashboard /> },
           { path: 'quick-report', element: <StudentDashboard /> },
+          { path: 'timetable', element: <StudentTimetableView /> },
+          { path: 'attendance', element: <StudentAttendanceView /> },
           { path: 'requests', element: <FacultyRequestsView /> },
           { path: 'facilities', element: <CampusView /> },
-          { path: 'notices', element: <FacultyNoticesView /> },
           { path: 'notice-board', element: <StudentNoticeBoardView /> },
+          { path: 'notices', element: <FacultyNoticesView /> },
           { path: 'admissions', element: <StudentAdmissionsView /> },
           { path: 'transport-hostel', element: <StudentTransportHostelView /> },
+          { path: 'transport', element: <StudentTransportHostelView /> },
           { path: 'my-learning', element: <StudentMyLearningView /> },
         ]
       }
