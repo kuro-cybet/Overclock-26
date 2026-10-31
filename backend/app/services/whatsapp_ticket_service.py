@@ -243,6 +243,28 @@ class WhatsAppTicketService:
         except Exception as e:
             logger.error(f"[WhatsApp] Work order auto-dispatch error for {incident.incident_code}: {e}", exc_info=True)
             incident.status = "open"
+            work_order, technician = None, None
+
+        # Lifecycle notifications: Dispatch Email and In-App Notifications
+        from app.services import workflow_notifications
+        try:
+            workflow_notifications.report_submitted(
+                db,
+                report,
+                reporter_email=user.email,
+                incident_created=True,
+                work_order=work_order,
+                technician=technician
+            )
+            workflow_notifications.report_triaged(
+                db,
+                report,
+                incident,
+                work_order=work_order,
+                technician=technician
+            )
+        except Exception as e:
+            logger.error(f"[WhatsApp] Notification dispatch error for {incident.incident_code}: {e}", exc_info=True)
 
         db.commit()
         db.refresh(incident)
