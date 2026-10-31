@@ -1,3 +1,4 @@
+import { formatINR } from '../../shared/utils/currency';
 import React, { useState, useEffect } from 'react';
 import { api } from '../../core/api/client';
 import { useAuth } from '../../core/auth/AuthProvider';
@@ -60,7 +61,7 @@ export const ApprovalsView: React.FC = () => {
       accessor: 'cost_amount' as const,
       render: (r: any) => (
         <span className="font-mono font-bold text-gray-800">
-          ${r.cost_amount > 0 ? r.cost_amount.toFixed(2) : '0.00'}
+          {formatINR(r.cost_amount)}
         </span>
       )
     },
@@ -194,4 +195,5 @@ export const ApprovalsView: React.FC = () => {
     </div>
   );
 };
+
 

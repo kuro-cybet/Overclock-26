@@ -19,7 +19,9 @@ from app.api.v1 import (
     simulations,
     integrations,
     intelligence,
-    whatsapp
+    whatsapp,
+    academic,
+    transport
 )
 
 api_router = APIRouter()
@@ -44,3 +46,5 @@ api_router.include_router(simulations.router)
 api_router.include_router(integrations.router)
 api_router.include_router(intelligence.router)
 api_router.include_router(whatsapp.router)
+api_router.include_router(academic.router)
+api_router.include_router(transport.router)

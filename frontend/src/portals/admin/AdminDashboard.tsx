@@ -1,3 +1,4 @@
+import { formatINR } from '../../shared/utils/currency';
 import React, { useState, useEffect } from 'react';
 import { api } from '../../core/api/client';
 import { useAuth } from '../../core/auth/AuthProvider';
@@ -12,7 +13,6 @@ import {
   Building,
   Boxes,
   FileCheck,
-  Play,
   ArrowRight,
   ShieldCheck,
   TrendingUp,
@@ -143,12 +143,7 @@ export const AdminDashboard: React.FC = () => {
       {/* Page Title & Simulator CTA Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
         <div>
-          <div className="flex items-center space-x-2">
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-[#F29877]/20 text-[#d9673d]">
-              Live Campus Command
-            </span>
-          </div>
-          <h1 className="text-2xl font-black text-[#345873] mt-1">Operations Control Centre</h1>
+          <h1 className="text-2xl font-black text-[#345873]">Operations Control Centre</h1>
           <p className="text-xs text-gray-500 mt-1">
             {user?.sub_role === 'system_admin'
               ? 'Unrestricted root authority across all operational modules, simulations, staff schedules, and system overrides.'
@@ -162,15 +157,7 @@ export const AdminDashboard: React.FC = () => {
           </p>
         </div>
 
-        {user?.sub_role === 'system_admin' ? (
-          <button
-            onClick={() => navigate('/admin/simulator')}
-            className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-[#F29877] to-[#e07b55] text-white text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer self-start md:self-auto"
-          >
-            <Play size={16} fill="white" />
-            <span>Launch Scenario Simulator</span>
-          </button>
-        ) : user?.sub_role === 'department_manager' ? (
+        {user?.sub_role === 'department_manager' ? (
           <button
             onClick={() => navigate('/admin/approvals')}
             className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-[#345873] text-white text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer self-start md:self-auto"
@@ -194,15 +181,7 @@ export const AdminDashboard: React.FC = () => {
             <Boxes size={16} />
             <span>Inventory & Parts Requisitions</span>
           </button>
-        ) : (
-          <button
-            onClick={() => navigate('/admin/simulator')}
-            className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-[#F29877] to-[#e07b55] text-white text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer self-start md:self-auto"
-          >
-            <Play size={16} fill="white" />
-            <span>Launch Scenario Simulator</span>
-          </button>
-        )}
+        ) : null}
       </div>
 
       {/* KPI Cards (Page 4 Blueprint: Open incidents, SLA compliance, active work orders, room utilisation, parts shortages) */}
@@ -417,7 +396,7 @@ export const AdminDashboard: React.FC = () => {
                 </div>
                 <div className="text-right">
                   <span className="font-mono font-bold text-[#345873] text-sm block">
-                    ${Number(app.cost_amount || 0).toFixed(2)}
+                    {formatINR(app.cost_amount)}
                   </span>
                   <span className="text-[10px] text-amber-700 font-bold uppercase">Pending Decision</span>
                 </div>

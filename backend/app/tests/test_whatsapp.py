@@ -1,4 +1,4 @@
-﻿import json
+import json
 import uuid
 import hmac
 import hashlib
@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.config import settings
 from app.database.connection import SessionLocal
-from app.database.models.whatsapp import WhatsAppMessageLog, WhatsAppSession
+from app.database.models.whatsapp import WhatsAppMessageLog, WhatsAppSession, WhatsAppUserLink
 from app.database.models.report import Report
 from app.database.models.incident import Incident
 from app.database.models.work_order import WorkOrder
@@ -293,11 +293,19 @@ def test_automatic_whatsapp_notifications_on_lifecycle():
         headers = {"Authorization": f"Bearer {token}"}
 
         test_phone = f"+1555{uuid.uuid4().int % 9000000 + 1000000}"
+        clean_p = test_phone.replace("+", "")
+        student = db.query(User).filter(User.role == "student").first()
+        student.phone_number = clean_p
+        student.whatsapp_verified = True
+        link = db.query(WhatsAppUserLink).filter(WhatsAppUserLink.user_id == student.id).first()
+        if link:
+            link.phone_number = clean_p
+        db.commit()
 
         # 2. Submit a complaint from a student via WhatsApp
         client.post("/api/v1/whatsapp/simulate", json={
             "from_phone": test_phone,
-            "message": "The Wi-Fi in Computer Lab A is dropping continuously."
+            "message": "The Wi-Fi in Engineering Block Computer Lab A is dropping continuously."
         })
         rep_res = client.post("/api/v1/whatsapp/simulate", json={
             "from_phone": test_phone,
@@ -310,7 +318,7 @@ def test_automatic_whatsapp_notifications_on_lifecycle():
 
         # Link to or create incident
         tech = db.query(User).filter(User.email == "tech@campusops.edu").first()
-        incident = db.query(Incident).filter(Incident.room_id == rep.room_id).first()
+        incident = db.query(Incident).filter(Incident.id == rep.incident_id).first() if rep.incident_id else None
         if not incident:
             incident = Incident(
                 incident_code=f"INC-{uuid.uuid4().hex[:6].upper()}",
@@ -340,6 +348,7 @@ def test_automatic_whatsapp_notifications_on_lifecycle():
         wo_id = wo_res.json()["id"]
 
         # Check notification outbox for assignment notification
+        db.commit()
         assign_notif = db.query(NotificationOutbox).filter(
             NotificationOutbox.recipient_phone.like(f"%{clean_p}%"),
             NotificationOutbox.subject.like("%assigned%")

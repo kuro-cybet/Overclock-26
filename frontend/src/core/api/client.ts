@@ -253,5 +253,28 @@ export const api = {
   getPredictiveFleetOverview: () => apiRequest('/assets/predictive-overview'),
   getAssetPredictiveHealth: (assetId: string) => apiRequest(`/assets/${assetId}/predictive-health`),
 
+  // Academic Timetable & Attendance
+  getMyTimetable: () => apiRequest('/academic/timetable/my'),
+  getTimetables: (params?: string) => apiRequest(`/academic/timetable${params ? `?${params}` : ''}`),
+  saveTimetableSlot: (data: any) =>
+    apiRequest('/academic/timetable', { method: 'POST', body: JSON.stringify(data) }),
+  getMyAttendance: () => apiRequest('/academic/attendance/my'),
+  getFacultyAttendanceSessions: () => apiRequest('/academic/attendance/sessions'),
+  getEnrolledStudents: (sectionId: string, courseId: string) =>
+    apiRequest(`/academic/attendance/students?section_id=${sectionId}&course_id=${courseId}`),
+  submitAttendance: (data: any) =>
+    apiRequest('/academic/attendance/submit', { method: 'POST', body: JSON.stringify(data) }),
+  getAttendanceReports: () => apiRequest('/academic/attendance/reports'),
+
+  // Chennai Campus Transportation
+  getTransportRoutes: (search?: string) =>
+    apiRequest(`/transport/routes${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  getMyTransportAssignment: () => apiRequest('/transport/my-assignment'),
+  getTransportAnnouncements: (routeId?: string) =>
+    apiRequest(`/transport/announcements${routeId ? `?route_id=${routeId}` : ''}`),
+  saveTransportRoute: (data: any) =>
+    apiRequest('/transport/routes', { method: 'POST', body: JSON.stringify(data) }),
+
   apiRequest
 };
+

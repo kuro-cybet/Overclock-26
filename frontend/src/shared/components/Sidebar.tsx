@@ -1,7 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../core/auth/AuthProvider';
-import { tokens } from '../../design-system/tokens';
 import {
   LayoutDashboard,
   AlertTriangle,
@@ -43,7 +42,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
   const navigate = useNavigate();
 
   const role = user?.role || 'admin';
-  const currentAccent = tokens.roleAccents[role as keyof typeof tokens.roleAccents] || tokens.roleAccents.admin;
 
   // Navigation menus customized per role and admin sub-role
   const allAdminLinks: (NavLinkItem & { allowedSubRoles?: string[] })[] = [
@@ -52,6 +50,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
     { to: '/admin/predictive', label: 'Predictive Maintenance', icon: <Layers size={22} />, allowedSubRoles: ['system_admin', 'facilities_admin'] },
     { to: '/admin/incidents', label: 'Incidents & Triage', icon: <AlertTriangle size={22} />, allowedSubRoles: ['system_admin', 'department_manager', 'facilities_admin'] },
     { to: '/admin/campus', label: 'Campus & Facilities', icon: <Building2 size={22} />, allowedSubRoles: ['system_admin', 'facilities_admin'] },
+    { to: '/admin/timetable', label: 'Timetable & Attendance', icon: <Calendar size={22} />, allowedSubRoles: ['system_admin', 'department_manager', 'facilities_admin'] },
+    { to: '/admin/transport', label: 'Transport Management', icon: <Bus size={22} />, allowedSubRoles: ['system_admin', 'facilities_admin'] },
     { to: '/admin/work-orders', label: 'Work Orders', icon: <Wrench size={22} />, allowedSubRoles: ['system_admin', 'facilities_admin'] },
     { to: '/admin/inventory', label: 'Inventory & Parts', icon: <Boxes size={22} />, allowedSubRoles: ['system_admin', 'procurement_approver'] },
     { to: '/admin/approvals', label: 'Pending Approvals', icon: <FileCheck2 size={22} />, allowedSubRoles: ['system_admin', 'department_manager', 'procurement_approver'] },
@@ -78,7 +78,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
 
   const facultyLinks: NavLinkItem[] = [
     { to: '/faculty', label: 'Academic Workspace', icon: <LayoutDashboard size={22} /> },
-    { to: '/faculty/timetable', label: 'Timetable & Rooms', icon: <Calendar size={22} /> },
+    { to: '/faculty/timetable', label: 'Teaching Schedule & Attendance', icon: <Calendar size={22} /> },
+    { to: '/faculty/transport', label: 'Faculty Transport', icon: <Bus size={22} /> },
     { to: '/faculty/requests', label: 'My Support Requests', icon: <ClipboardList size={22} /> },
     { to: '/faculty/exam-support', label: 'Exam & Lab Support', icon: <Sparkles size={22} /> },
     { to: '/faculty/notices', label: 'Campus Notices', icon: <Megaphone size={22} /> },
@@ -86,11 +87,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
 
   const studentLinks: NavLinkItem[] = [
     { to: '/student', label: 'Student Workspace', icon: <LayoutDashboard size={22} /> },
+    { to: '/student/timetable', label: 'My Timetable', icon: <Calendar size={22} /> },
+    { to: '/student/attendance', label: 'My Attendance', icon: <CheckCircle2 size={22} /> },
     { to: '/student/quick-report', label: 'Submit Issue Report', icon: <MessageSquarePlus size={22} /> },
     { to: '/student/requests', label: 'My Requests & Status', icon: <ClipboardList size={22} /> },
+    { to: '/student/transport-hostel', label: 'Transport & Hostel', icon: <Bus size={22} /> },
     { to: '/student/notice-board', label: 'Notice Board', icon: <Megaphone size={22} /> },
     { to: '/student/admissions', label: 'Admissions', icon: <GraduationCap size={22} /> },
-    { to: '/student/transport-hostel', label: 'Transport & Hostel', icon: <Bus size={22} /> },
     { to: '/student/my-learning', label: 'My Learning', icon: <BookOpen size={22} /> },
   ];
 
@@ -159,21 +162,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
             </button>
           </div>
 
-          {/* Active Portal Badge */}
-          <div className="px-6 py-3.5 border-b border-gray-800 bg-black/20">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Active Portal</span>
-              <span
-                className="text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider"
-                style={{ backgroundColor: `${currentAccent.color}30`, color: currentAccent.color }}
-              >
-                {currentAccent.name}
-              </span>
-            </div>
-            <p className="text-sm font-semibold text-slate-200 mt-1 truncate">
-              {user?.sub_role ? String(user.sub_role).replace(/_/g, ' ') : user?.department || 'University Wide'}
-            </p>
-          </div>
+
 
           {/* Navigation Items */}
           <nav className="p-4 space-y-2">

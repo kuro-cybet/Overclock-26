@@ -63,6 +63,8 @@ _USER_COLUMNS = {
     "provider_subject": "VARCHAR(255)",
     "email_verified": "BOOLEAN DEFAULT 0",
     "last_login_at": "DATETIME",
+    "phone_number": "VARCHAR(30)",
+    "whatsapp_verified": "BOOLEAN DEFAULT 0",
 }
 
 _ROLE_ASSIGNMENT_TABLES = {
@@ -122,6 +124,18 @@ def _repair_notification_outbox(conn) -> None:
             "ALTER TABLE notification_outbox ADD COLUMN event_type VARCHAR(50)"
         )
         logger.info("[schema] added notification_outbox.event_type")
+
+    if "recipient_phone" not in existing:
+        conn.exec_driver_sql(
+            "ALTER TABLE notification_outbox ADD COLUMN recipient_phone VARCHAR(50)"
+        )
+        logger.info("[schema] added notification_outbox.recipient_phone")
+
+    if "idempotency_key" not in existing:
+        conn.exec_driver_sql(
+            "ALTER TABLE notification_outbox ADD COLUMN idempotency_key VARCHAR(128)"
+        )
+        logger.info("[schema] added notification_outbox.idempotency_key")
 
     conn.exec_driver_sql(
         "UPDATE notification_outbox SET event_type = 'legacy' "
