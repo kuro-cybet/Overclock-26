@@ -1,7 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../core/auth/AuthProvider';
-import { tokens } from '../../design-system/tokens';
 import {
   LayoutDashboard,
   AlertTriangle,
@@ -43,7 +42,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
   const navigate = useNavigate();
 
   const role = user?.role || 'admin';
-  const currentAccent = tokens.roleAccents[role as keyof typeof tokens.roleAccents] || tokens.roleAccents.admin;
 
   // Navigation menus customized per role and admin sub-role
   const allAdminLinks: (NavLinkItem & { allowedSubRoles?: string[] })[] = [
@@ -159,21 +157,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
             </button>
           </div>
 
-          {/* Active Portal Badge */}
-          <div className="px-6 py-3.5 border-b border-gray-800 bg-black/20">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Active Portal</span>
-              <span
-                className="text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider"
-                style={{ backgroundColor: `${currentAccent.color}30`, color: currentAccent.color }}
-              >
-                {currentAccent.name}
-              </span>
-            </div>
-            <p className="text-sm font-semibold text-slate-200 mt-1 truncate">
-              {user?.sub_role ? String(user.sub_role).replace(/_/g, ' ') : user?.department || 'University Wide'}
-            </p>
-          </div>
+
 
           {/* Navigation Items */}
           <nav className="p-4 space-y-2">

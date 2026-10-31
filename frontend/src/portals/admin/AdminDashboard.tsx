@@ -12,7 +12,6 @@ import {
   Building,
   Boxes,
   FileCheck,
-  Play,
   ArrowRight,
   ShieldCheck,
   TrendingUp,
@@ -136,15 +135,7 @@ export const AdminDashboard: React.FC = () => {
           </p>
         </div>
 
-        {user?.sub_role === 'system_admin' ? (
-          <button
-            onClick={() => navigate('/admin/simulator')}
-            className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-[#F29877] to-[#e07b55] text-white text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer self-start md:self-auto"
-          >
-            <Play size={16} fill="white" />
-            <span>Launch Scenario Simulator</span>
-          </button>
-        ) : user?.sub_role === 'department_manager' ? (
+        {user?.sub_role === 'department_manager' ? (
           <button
             onClick={() => navigate('/admin/approvals')}
             className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-[#345873] text-white text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer self-start md:self-auto"
@@ -168,15 +159,7 @@ export const AdminDashboard: React.FC = () => {
             <Boxes size={16} />
             <span>Inventory & Parts Requisitions</span>
           </button>
-        ) : (
-          <button
-            onClick={() => navigate('/admin/simulator')}
-            className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-[#F29877] to-[#e07b55] text-white text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer self-start md:self-auto"
-          >
-            <Play size={16} fill="white" />
-            <span>Launch Scenario Simulator</span>
-          </button>
-        )}
+        ) : null}
       </div>
 
       {/* KPI Cards (Page 4 Blueprint: Open incidents, SLA compliance, active work orders, room utilisation, parts shortages) */}

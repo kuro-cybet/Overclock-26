@@ -4,6 +4,7 @@ import { RoleGuard } from '../core/auth/RoleGuard';
 import { useAuth } from '../core/auth/AuthProvider';
 import { PortalLayout } from '../shared/layouts/PortalLayout';
 import { RouteErrorBoundary } from '../shared/components/RouteErrorBoundary';
+import { NotFoundPage } from '../shared/components/NotFoundPage';
 import { LoginPage } from './LoginPage';
 
 // Admin Pages
@@ -135,6 +136,14 @@ export const router = createBrowserRouter([
             )
           },
           {
+            path: 'simulator',
+            element: (
+              <RoleGuard allowedRoles={['admin']} allowedSubRoles={['system_admin']}>
+                <ScenarioSimulatorView />
+              </RoleGuard>
+            )
+          },
+          {
             path: 'analytics',
             element: (
               <RoleGuard allowedRoles={['admin']} allowedSubRoles={['department_manager']}>
@@ -203,7 +212,7 @@ export const router = createBrowserRouter([
   },
   {
     path: '*',
-    element: <Navigate to="/login" replace />,
+    element: <NotFoundPage />,
     errorElement: <RouteErrorBoundary />
   }
 ]);
