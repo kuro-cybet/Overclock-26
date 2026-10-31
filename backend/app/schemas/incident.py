@@ -19,6 +19,11 @@ class IncidentCorrelateRequest(BaseModel):
     target_incident_id: Optional[str] = None
     new_title: Optional[str] = None
 
+class IncidentMergeRequest(BaseModel):
+    primary_incident_id: str
+    duplicate_incident_ids: List[str]
+    notes: Optional[str] = None
+
 class IncidentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

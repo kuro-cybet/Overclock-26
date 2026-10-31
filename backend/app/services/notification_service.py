@@ -9,7 +9,7 @@ from app.integrations.gmail_sender import EmailDeliveryError, gmail_sender
 
 logger = logging.getLogger(__name__)
 
-EMAIL_EVENT_TYPES = frozenset({"report_submitted", "incident_resolved"})
+EMAIL_EVENT_TYPES = frozenset({"report_submitted", "incident_resolved", "incident_update", "report_correlated"})
 
 
 class NotificationService:
@@ -98,9 +98,20 @@ class NotificationService:
         body: str,
         event_type: str,
         channel: str = "email",
+        idempotency_key: Optional[str] = None,
     ) -> NotificationOutbox:
         if channel == "email" and event_type not in EMAIL_EVENT_TYPES:
             raise ValueError(f"Unsupported email lifecycle event: {event_type}")
+
+        if idempotency_key:
+            existing = (
+                db.query(NotificationOutbox)
+                .filter(NotificationOutbox.idempotency_key == idempotency_key)
+                .first()
+            )
+            if existing:
+                logger.info(f"[Outbox] Duplicate email event ignored: {idempotency_key}")
+                return existing
 
         outbox = NotificationOutbox(
             recipient_email=recipient_email,
@@ -110,7 +121,8 @@ class NotificationService:
             body=body,
             status="queued",
             attempts=0,
-            last_attempt_at=None
+            last_attempt_at=None,
+            idempotency_key=idempotency_key,
         )
         db.add(outbox)
         db.flush()
@@ -229,15 +241,38 @@ class NotificationService:
                 )
                 subject = f"Ticket {incident.incident_code} {new_status}"
 
-            idempotency_key = f"wa_ticket_{incident.incident_code}_{new_status}_{report.reporter_id}"
-            self.queue_whatsapp_notification(
-                db=db,
-                recipient_phone=phone,
-                body=body,
-                idempotency_key=idempotency_key,
-                recipient_email=user.email if user else None,
-                subject=subject
-            )
+            if phone:
+                idempotency_key = f"wa_ticket_{incident.incident_code}_{new_status}_{report.reporter_id}"
+                self.queue_whatsapp_notification(
+                    db=db,
+                    recipient_phone=phone,
+                    body=body,
+                    idempotency_key=idempotency_key,
+                    recipient_email=user.email if user else None,
+                    subject=subject
+                )
+
+            # Dispatch email notification to student's registered email
+            if user and user.email:
+                email_body = (
+                    f"Hi {user.name},\n\n"
+                    f"{body.replace('*', '')}\n\n"
+                    f"Incident Code: {incident.incident_code}\n"
+                    f"Report Code: {report.report_code}\n"
+                    f"Status: {status_title}\n\n"
+                    f"You can view live updates on your student portal at /student/requests.\n\n"
+                    f"— CampusOps Facilities Support"
+                )
+                email_event = "incident_resolved" if new_status in ["resolved", "closed", "completed"] else "incident_update"
+                email_idempotency_key = f"email_ticket_{incident.incident_code}_{new_status}_{report.reporter_id}"
+                self.queue_outbox_email(
+                    db=db,
+                    recipient_email=user.email,
+                    subject=f"CampusOps: {subject}",
+                    body=email_body,
+                    event_type=email_event,
+                    idempotency_key=email_idempotency_key
+                )
 
     def process_pending_outbox(self, db: Session, max_items: int = 25) -> Dict[str, Any]:
         """

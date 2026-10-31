@@ -226,14 +226,25 @@ class WhatsAppMessageProcessor:
             room_str = loc["room_code"]
             bld_str = loc["building_name"]
 
-            response_text = (
-                "Your issue has been registered successfully.\n\n"
-                f"Ticket ID: {incident.incident_code}\n"
-                f"Issue: {cat} in {room_str}\n"
-                f"Location: {room_str} ({bld_str})\n"
-                f"Status: Open\n\n"
-                "You will receive updates about your ticket."
-            )
+            if getattr(incident, "_was_merged", False):
+                response_text = (
+                    "✅ *Your issue has been registered successfully and merged with an active ticket.*\n\n"
+                    f"Ticket ID: {incident.incident_code}\n"
+                    f"Issue: {cat} in {room_str}\n"
+                    f"Location: {room_str} ({bld_str})\n"
+                    f"Status: {incident.status.title()}\n"
+                    f"Total Reports Combined: {incident.correlated_count}\n\n"
+                    "*(Note: An active ticket already exists for this room. Your report has been merged with it. You will receive updates via WhatsApp and email as work progresses.)*"
+                )
+            else:
+                response_text = (
+                    "Your issue has been registered successfully.\n\n"
+                    f"Ticket ID: {incident.incident_code}\n"
+                    f"Issue: {cat} in {room_str}\n"
+                    f"Location: {room_str} ({bld_str})\n"
+                    f"Status: {incident.status.title()}\n\n"
+                    "You will receive updates about your ticket."
+                )
             await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
             return response_text
 
@@ -249,14 +260,25 @@ class WhatsAppMessageProcessor:
                 room_str = loc["room_code"]
                 bld_str = loc["building_name"]
 
-                response_text = (
-                    "Your issue has been registered successfully.\n\n"
-                    f"Ticket ID: {incident.incident_code}\n"
-                    f"Issue: {cat} in {room_str}\n"
-                    f"Location: {room_str} ({bld_str})\n"
-                    f"Status: Open\n\n"
-                    "You will receive updates about your ticket."
-                )
+                if getattr(incident, "_was_merged", False):
+                    response_text = (
+                        "✅ *Your issue has been registered successfully and merged with an active ticket.*\n\n"
+                        f"Ticket ID: {incident.incident_code}\n"
+                        f"Issue: {cat} in {room_str}\n"
+                        f"Location: {room_str} ({bld_str})\n"
+                        f"Status: {incident.status.title()}\n"
+                        f"Total Reports Combined: {incident.correlated_count}\n\n"
+                        "*(Note: An active ticket already exists for this room. Your report has been merged with it. You will receive updates via WhatsApp and email as work progresses.)*"
+                    )
+                else:
+                    response_text = (
+                        "Your issue has been registered successfully.\n\n"
+                        f"Ticket ID: {incident.incident_code}\n"
+                        f"Issue: {cat} in {room_str}\n"
+                        f"Location: {room_str} ({bld_str})\n"
+                        f"Status: {incident.status.title()}\n\n"
+                        "You will receive updates about your ticket."
+                    )
             elif any(w in lower_text for w in ["no", "cancel", "abort", "nevermind", "stop"]):
                 whatsapp_conversation_service.reset_to_idle(db, conv)
                 response_text = "Your ticket request has been cancelled. Let me know if you need assistance with anything else."
