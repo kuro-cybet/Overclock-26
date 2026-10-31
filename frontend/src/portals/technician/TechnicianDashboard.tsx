@@ -20,7 +20,10 @@ import {
   X,
   QrCode
 } from 'lucide-react';
-import { RoomQrScanner } from '../../shared/components/RoomQrScanner';
+import {
+  DeviceQrScanner,
+  type DeviceQrScannerHandle,
+} from '../../shared/components/DeviceQrScanner';
 
 export const TechnicianDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -32,10 +35,11 @@ export const TechnicianDashboard: React.FC = () => {
   const [evidenceNotes, setEvidenceNotes] = useState('');
   const [savingTask, setSavingTask] = useState(false);
   const [historicalCases, setHistoricalCases] = useState<any[]>([]);
-  const [roomScannerOpen, setRoomScannerOpen] = useState(false);
+  const [deviceScannerOpen, setDeviceScannerOpen] = useState(false);
   const [scannedRoom, setScannedRoom] = useState<any | null>(null);
   const [readinessSaving, setReadinessSaving] = useState(false);
   const [readinessMessage, setReadinessMessage] = useState('');
+  const deviceScannerRef = React.useRef<DeviceQrScannerHandle>(null);
 
   // Parts requisition modal state
   const [partsModalOpen, setPartsModalOpen] = useState(false);
@@ -171,11 +175,11 @@ export const TechnicianDashboard: React.FC = () => {
     }
   };
 
-  const handleRoomQrScan = useCallback(async (value: string) => {
+  const handleDeviceQrScan = useCallback(async (value: string) => {
     const match = value.trim().match(/^(?:campusops-asset:)?([a-z0-9_-]+)$/i);
-    setRoomScannerOpen(false);
+    setDeviceScannerOpen(false);
     if (!match) {
-      setReadinessMessage('This QR code does not contain a valid device asset tag.');
+      setReadinessMessage('This device QR code does not contain a valid asset tag or serial number.');
       return;
     }
 
@@ -185,7 +189,7 @@ export const TechnicianDashboard: React.FC = () => {
       setScannedRoom({ ...room, scanned_asset: asset });
       setReadinessMessage('');
     } catch (err: any) {
-      setReadinessMessage(`Could not find the scanned device: ${err.message}`);
+      setReadinessMessage(`Could not find the scanned device by asset tag or serial number: ${err.message}`);
     }
   }, []);
 
@@ -312,36 +316,40 @@ export const TechnicianDashboard: React.FC = () => {
           <div>
             <h2 className="flex items-center gap-2 text-sm font-extrabold text-[#345873]">
               <QrCode size={17} className="text-[#287D70]" />
-              Daily room readiness scan
+              Classroom device QR inspection
             </h2>
             <p className="mt-1 text-xs text-gray-500">
-              Scan the QR sticker attached to a device in the classroom, inspect the room, then record whether it is working, stale, or unavailable.
+              Scan the QR sticker physically attached to the classroom device. After it is identified, update that classroom’s daily readiness.
             </p>
           </div>
           <button
             type="button"
             onClick={() => {
+              if (deviceScannerOpen) {
+                void deviceScannerRef.current?.stopScanning();
+                setDeviceScannerOpen(false);
+                return;
+              }
               setReadinessMessage('');
               setScannedRoom(null);
-              setRoomScannerOpen((open) => !open);
+              setDeviceScannerOpen(true);
+              void deviceScannerRef.current?.startScanning();
             }}
             className="rounded-xl bg-[#287D70] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#1f5f55]"
           >
-            {roomScannerOpen ? 'Close scanner' : 'Scan room QR'}
+            {deviceScannerOpen ? 'Close device scanner' : 'Scan device QR'}
           </button>
         </div>
 
-        {roomScannerOpen && (
-          <div className="mt-4 max-w-md overflow-hidden rounded-2xl border border-slate-200 p-3">
-            <RoomQrScanner onScan={handleRoomQrScan} />
-          </div>
-        )}
+        <div className="mt-4 max-w-md rounded-2xl border border-slate-200 p-3">
+          <DeviceQrScanner ref={deviceScannerRef} onScan={handleDeviceQrScan} />
+        </div>
 
         {scannedRoom && (
           <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-bold text-gray-800">
-                {scannedRoom.room_number} · {scannedRoom.name}
+                Classroom: {scannedRoom.room_number} · {scannedRoom.name}
               </p>
               <p className="mt-0.5 text-xs text-gray-600">
                 Scanned device: {scannedRoom.scanned_asset.name} ({scannedRoom.scanned_asset.asset_tag})
@@ -352,9 +360,9 @@ export const TechnicianDashboard: React.FC = () => {
             </div>
             <div className="flex flex-wrap gap-2">
               {[
-                ['confirmed_today', 'Working'],
-                ['stale', 'Stale'],
-                ['unavailable', 'Unavailable'],
+                ['confirmed_today', 'Mark room working'],
+                ['stale', 'Mark room stale'],
+                ['unavailable', 'Mark room unavailable'],
               ].map(([status, label]) => (
                 <button
                   key={status}
