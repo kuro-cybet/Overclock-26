@@ -30,7 +30,7 @@ export const RoomQrScanner: React.FC<RoomQrScannerProps> = ({ onScan }) => {
 
     try {
       scanner.render(
-        (decodedText) => {
+        (decodedText: string) => {
           if (deliveredScan.current) return;
           deliveredScan.current = true;
           onScanRef.current(decodedText);
@@ -43,7 +43,7 @@ export const RoomQrScanner: React.FC<RoomQrScannerProps> = ({ onScan }) => {
     }
 
     return () => {
-      scanner.clear().catch((error) => {
+      scanner.clear().catch((error: any) => {
         console.error('Failed to stop room QR scanner', error);
       });
     };
