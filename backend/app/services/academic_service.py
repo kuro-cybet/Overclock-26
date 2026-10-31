@@ -136,6 +136,64 @@ class AcademicService:
         db.commit()
 
     @staticmethod
+    def _provision_faculty_schedule(db: Session, faculty_id: str):
+        """Provision realistic weekly teaching classes for any faculty member who has no slots."""
+        AcademicService.seed_default_academic_data(db)
+        cs_sec = db.query(AcademicSection).filter(AcademicSection.section_name == "CSE-A").first() or db.query(AcademicSection).first()
+        if not cs_sec:
+            return
+
+        courses = db.query(Course).all()
+        if not courses:
+            return
+
+        room1 = db.query(Room).filter(Room.room_number.like("%101%")).first() or db.query(Room).first()
+        room2 = db.query(Room).filter(Room.room_number.like("%102%")).first() or room1
+        if not room1 or not room2:
+            return
+
+        c1 = courses[0]
+        c2 = courses[1] if len(courses) > 1 else c1
+        c3 = courses[2] if len(courses) > 2 else c1
+        c4 = courses[3] if len(courses) > 3 else c2
+
+        slots_blueprint = [
+            {"course": c1, "day": 0, "start": "09:00", "end": "10:00", "room": room1.id, "type": "lecture"},
+            {"course": c2, "day": 0, "start": "10:15", "end": "11:15", "room": room2.id, "type": "lecture"},
+            {"course": c3, "day": 0, "start": "11:30", "end": "12:30", "room": room1.id, "type": "lecture"},
+            {"course": c4, "day": 0, "start": "13:30", "end": "15:30", "room": room1.id, "type": "lab"},
+            {"course": c2, "day": 1, "start": "09:00", "end": "10:00", "room": room2.id, "type": "lecture"},
+            {"course": c3, "day": 1, "start": "10:15", "end": "11:15", "room": room1.id, "type": "lecture"},
+            {"course": c1, "day": 1, "start": "11:30", "end": "12:30", "room": room1.id, "type": "lecture"},
+            {"course": c4, "day": 2, "start": "09:00", "end": "10:00", "room": room1.id, "type": "lecture"},
+            {"course": c1, "day": 2, "start": "10:15", "end": "12:15", "room": room2.id, "type": "lab"},
+            {"course": c3, "day": 3, "start": "09:00", "end": "10:00", "room": room1.id, "type": "lecture"},
+            {"course": c2, "day": 3, "start": "10:15", "end": "11:15", "room": room2.id, "type": "lecture"},
+            {"course": c1, "day": 4, "start": "09:00", "end": "10:00", "room": room1.id, "type": "lecture"},
+            {"course": c4, "day": 4, "start": "10:15", "end": "11:15", "room": room1.id, "type": "lecture"},
+            {"course": c2, "day": 5, "start": "09:30", "end": "11:30", "room": room2.id, "type": "tutorial"},
+        ]
+
+        for s in slots_blueprint:
+            slot = TimetableSlot(
+                id=str(uuid.uuid4()),
+                section_id=cs_sec.id,
+                course_id=s["course"].id,
+                faculty_id=faculty_id,
+                room_id=s["room"],
+                day_of_week=s["day"],
+                start_time=s["start"],
+                end_time=s["end"],
+                slot_type=s["type"],
+                is_published=True
+            )
+            db.add(slot)
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+
+    @staticmethod
     def get_faculty_schedule(db: Session, faculty_id: str) -> Dict[str, Any]:
         """Returns the weekly and daily teaching schedule for a faculty member."""
         AcademicService.seed_default_academic_data(db)
@@ -144,6 +202,13 @@ class AcademicService:
             TimetableSlot.faculty_id == faculty_id,
             TimetableSlot.is_published == True
         ).all()
+
+        if not slots:
+            AcademicService._provision_faculty_schedule(db, faculty_id)
+            slots = db.query(TimetableSlot).filter(
+                TimetableSlot.faculty_id == faculty_id,
+                TimetableSlot.is_published == True
+            ).all()
 
         courses_map = {c.id: c for c in db.query(Course).all()}
         sections_map = {s.id: s for s in db.query(AcademicSection).all()}
