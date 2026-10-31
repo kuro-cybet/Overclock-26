@@ -92,9 +92,22 @@ def update_room_readiness(
     if not room:
         raise EntityNotFoundError("Room", room_id)
 
-    room.daily_readiness_status = payload.daily_readiness_status
-    room.readiness_checked_at = datetime.utcnow()
+    checked_at = datetime.utcnow()
+    readiness_status = (
+        "confirmed_today"
+        if payload.daily_readiness_status == "confirmed"
+        else payload.daily_readiness_status
+    )
+    room.daily_readiness_status = readiness_status
+    room.freshness_state = readiness_status
+    room.readiness_checked_at = checked_at
     room.readiness_checked_by = current_user.name
+    room.freshness_source = (
+        "technician_qr" if current_user.role == "technician" else "admin_override"
+    )
+    if readiness_status == "confirmed_today":
+        room.last_confirmed_at = checked_at
+        room.confirmed_by = current_user.name
     db.commit()
     db.refresh(room)
     return room

@@ -47,6 +47,23 @@ def list_assets(
         q = q.filter(Asset.room_id == room_id)
     return q.limit(limit).all()
 
+@router.get(
+    "/qr/{asset_tag}",
+    summary="Resolve Device QR Code",
+    description="Resolves a device asset tag printed on a physical QR label. Available to technicians and admins.",
+)
+def get_asset_for_qr(
+    asset_tag: str,
+    current_user: User = Depends(require_role(["admin", "technician"])),
+    db: Session = Depends(get_db),
+):
+    asset = db.query(Asset).filter(Asset.asset_tag == asset_tag).first()
+    if not asset:
+        asset = db.query(Asset).filter(Asset.serial_number == asset_tag).first()
+    if not asset:
+        raise EntityNotFoundError("Asset", asset_tag)
+    return asset
+
 @router.get("/{asset_id}")
 def get_asset(
     asset_id: str,

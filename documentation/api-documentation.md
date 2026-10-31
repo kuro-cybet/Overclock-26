@@ -63,6 +63,10 @@ Retrieves current identity, permissions, and assigned building/floor scope. Requ
 ### `POST /reports`
 Submits a natural language issue report. Automatically passes through the AI Extraction Adapter to detect category, urgency, location, and potential duplicates.
 
+### `GET /reports`
+Lists reports visible to the caller. Report records include reporter name, building
+name, room number/name, and asset tag/name where those records are available.
+
 ### `POST /incidents/correlate`
 Aggregates multiple individual user reports into a single canonical incident.
 ```json
@@ -95,6 +99,21 @@ Reassigns work order within policy:
 ---
 
 ## 4. Timetable & Room Bookings
+
+### `GET /assets/qr/{asset_tag}`
+Resolves the asset tag encoded by a physical device QR sticker. Technicians and
+admins can use it to identify the device and its assigned room.
+
+### `PATCH /rooms/{room_id}/readiness`
+Admin or technician records a room inspection. Technicians scan the physical QR
+label on a classroom device, then select that room's status:
+```json
+{
+  "daily_readiness_status": "confirmed_today"
+}
+```
+Supported statuses are `confirmed_today`, `stale`, `unconfirmed`, and `unavailable`.
+The response includes the latest checker, timestamp, and freshness source.
 
 ### `GET /bookings`
 Lists university bookings with start/end timestamps and equipment requirements.
@@ -131,3 +150,17 @@ Triggers one of the 4 blueprint disruption scenarios:
 
 ### `POST /simulations/reset`
 Restores the pristine university seed baseline without leaving orphaned records.
+
+## 7. Campus Announcements
+
+### `POST /notifications/broadcast`
+Available to admin accounts. Posts an in-app notification for all active non-mock
+accounts, visible through the notification panel.
+```json
+{
+  "title": "Campus maintenance",
+  "message": "The east wing will be offline from 18:00 to 19:00.",
+  "type": "warning"
+}
+```
+`type` may be `info`, `warning`, `critical`, or `action_required`.

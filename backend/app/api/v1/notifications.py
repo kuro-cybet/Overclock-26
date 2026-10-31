@@ -1,20 +1,68 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models.notification import Notification, NotificationOutbox
 from app.database.models.user import User
 from app.schemas.notification import (
     NotificationResponse,
+    NotificationBroadcastCreate,
+    NotificationBroadcastResponse,
     ReadAllResponse,
     OutboxProcessResponse,
     OutboxStatusResponse
 )
 from app.core.exceptions import EntityNotFoundError
-from app.api.deps import get_current_user, require_admin_sub_role
+from app.api.deps import get_current_user, require_admin_sub_role, require_any_admin
 from app.services.notification_service import gmail_sender, notification_service
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
+
+
+@router.post(
+    "/broadcast",
+    response_model=NotificationBroadcastResponse,
+    summary="Broadcast an In-App Announcement",
+    description="Creates an in-app notification for every active non-mock account.",
+)
+def broadcast_notification(
+    payload: NotificationBroadcastCreate,
+    current_user: User = Depends(require_any_admin),
+    db: Session = Depends(get_db),
+):
+    active_users = db.query(User).filter(
+        User.is_active.is_(True),
+        or_(User.auth_provider.is_(None), User.auth_provider != "mock"),
+    )
+    recipients = active_users.with_entities(User.id, User.role).all()
+    recipient_ids_by_role = {}
+    for recipient_id, role in recipients:
+        recipient_ids_by_role.setdefault(role, recipient_id)
+    if not recipient_ids_by_role:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No active user accounts are available to receive this announcement.",
+        )
+
+    notifications = [
+        Notification(
+            recipient_id=recipient_ids_by_role[role],
+            recipient_role=role,
+            title=payload.title,
+            message=payload.message,
+            type=payload.type,
+        )
+        for role in recipient_ids_by_role
+    ]
+    db.add_all(notifications)
+    db.commit()
+    return {
+        "created_count": len(notifications),
+        "recipient_count": len(recipients),
+        "message": "Announcement posted to all active users.",
+    }
+
 
 @router.get(
     "",

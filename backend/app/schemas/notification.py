@@ -1,6 +1,18 @@
-from typing import Optional
+from typing import Optional, Literal
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class NotificationBroadcastCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    message: str = Field(min_length=1, max_length=5000)
+    type: Literal["info", "warning", "critical", "action_required"] = "info"
+
+
+class NotificationBroadcastResponse(BaseModel):
+    created_count: int
+    recipient_count: int
+    message: str
 
 class NotificationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
