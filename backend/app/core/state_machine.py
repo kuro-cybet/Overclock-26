@@ -13,13 +13,14 @@ REPORT_TRANSITIONS: Dict[str, Set[str]] = {
 }
 
 INCIDENT_TRANSITIONS: Dict[str, Set[str]] = {
-    "open": {"in_progress", "resolved", "cancelled"},
-    "in_progress": {"pending_parts", "pending_approval", "resolved"},
-    "pending_parts": {"in_progress", "resolved"},
-    "pending_approval": {"in_progress", "resolved", "open"},
+    "open": {"in_progress", "resolved", "cancelled", "merged"},
+    "in_progress": {"pending_parts", "pending_approval", "resolved", "cancelled", "merged"},
+    "pending_parts": {"in_progress", "resolved", "merged"},
+    "pending_approval": {"in_progress", "resolved", "open", "merged"},
     "resolved": {"closed", "in_progress"},  # can reopen if needed
     "closed": set(),
     "cancelled": set(),
+    "merged": set(),
 }
 
 WORK_ORDER_TRANSITIONS: Dict[str, Set[str]] = {

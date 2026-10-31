@@ -125,11 +125,14 @@ class WhatsAppTicketService:
         """
         Matches extracted building and room names against verified database entries.
         """
-        raw_room = (location_data.get("room") or "").strip()
-        raw_building = (location_data.get("building") or "").strip()
+        raw_room = (location_data.get("room") or location_data.get("room_code") or "").strip()
+        raw_building = (location_data.get("building") or location_data.get("building_name") or "").strip()
 
         matched_room = None
         matched_building = None
+
+        if location_data.get("room_id"):
+            matched_room = db.query(Room).filter(Room.id == location_data["room_id"]).first()
 
         if raw_room:
             # Try exact room_number match
@@ -180,26 +183,57 @@ class WhatsAppTicketService:
         db_priority = priority_map.get(priority.upper(), "P3")
         sla_due = sla_service.calculate_deadline(db_priority)
 
-        inc_count = db.query(Incident).count()
-        incident_code = f"COP-{1000 + inc_count + 1}"
+        # Check for existing active incident in the same room and category to prevent duplicates
+        existing_incident = None
+        if location.get("room_id"):
+            existing_incident = (
+                db.query(Incident)
+                .filter(
+                    Incident.room_id == location["room_id"],
+                    Incident.category == category.lower(),
+                    Incident.status.in_(["open", "assigned", "in_progress", "pending_parts"])
+                )
+                .first()
+            )
 
-        incident = Incident(
-            incident_code=incident_code,
-            title=f"{category} issue in {location['room_code']}",
-            description=description,
-            category=category.lower(),
-            severity="high" if db_priority in ["P1", "P2"] else "medium",
-            priority=db_priority,
-            building_id=location["building_id"],
-            room_id=location["room_id"],
-            status="open",
-            sla_due_at=sla_due,
-            is_sla_breached=False,
-            correlated_count=1,
-            summary=f"Automated WhatsApp ticket opened by {user.name} ({user.role})."
-        )
-        db.add(incident)
-        db.flush()
+        if existing_incident:
+            incident = existing_incident
+            incident.correlated_count += 1
+            incident.summary = (
+                f"Incident aggregated from {incident.correlated_count} reports. "
+                f"Location: {location.get('room_code', 'Room')} ({location.get('building_name', 'Campus')})."
+            )
+            incident_is_new = False
+            # Fetch existing work order and technician
+            work_order = db.query(WorkOrder).filter(WorkOrder.incident_id == incident.id).first()
+            technician = (
+                db.query(User).filter(User.id == work_order.assigned_technician_id).first()
+                if (work_order and work_order.assigned_technician_id)
+                else None
+            )
+            logger.info(f"[WhatsApp Correlation] Merged report into existing incident {incident.incident_code} (total reports: {incident.correlated_count})")
+        else:
+            inc_count = db.query(Incident).count()
+            incident_code = f"COP-{1000 + inc_count + 1}"
+
+            incident = Incident(
+                incident_code=incident_code,
+                title=f"{category} issue in {location['room_code']}",
+                description=description,
+                category=category.lower(),
+                severity="high" if db_priority in ["P1", "P2"] else "medium",
+                priority=db_priority,
+                building_id=location["building_id"],
+                room_id=location["room_id"],
+                status="open",
+                sla_due_at=sla_due,
+                is_sla_breached=False,
+                correlated_count=1,
+                summary=f"Automated WhatsApp ticket opened by {user.name} ({user.role})."
+            )
+            db.add(incident)
+            db.flush()
+            incident_is_new = True
 
         # Create linked report
         report_count = db.query(Report).count()
@@ -226,24 +260,25 @@ class WhatsAppTicketService:
         db.add(report)
         db.flush()
 
-        # Automatically create WorkOrder and attempt technician auto-assignment
-        try:
-            work_order, technician = work_order_service.ensure_work_order_for_incident(
-                db,
-                incident,
-                actor_id=user.id,
-                auto_assign=True
-            )
-            if technician:
-                incident.status = "assigned"
-                logger.info(f"[WhatsApp] Auto-assigned technician {technician.name} ({technician.id}) to incident {incident.incident_code}")
-            else:
+        if incident_is_new:
+            # Automatically create WorkOrder and attempt technician auto-assignment for new incidents
+            try:
+                work_order, technician = work_order_service.ensure_work_order_for_incident(
+                    db,
+                    incident,
+                    actor_id=user.id,
+                    auto_assign=True
+                )
+                if technician:
+                    incident.status = "assigned"
+                    logger.info(f"[WhatsApp] Auto-assigned technician {technician.name} ({technician.id}) to incident {incident.incident_code}")
+                else:
+                    incident.status = "open"
+                    logger.info(f"[WhatsApp] No technician auto-assigned for incident {incident.incident_code}; status remains open")
+            except Exception as e:
+                logger.error(f"[WhatsApp] Work order auto-dispatch error for {incident.incident_code}: {e}", exc_info=True)
                 incident.status = "open"
-                logger.info(f"[WhatsApp] No technician auto-assigned for incident {incident.incident_code}; status remains open")
-        except Exception as e:
-            logger.error(f"[WhatsApp] Work order auto-dispatch error for {incident.incident_code}: {e}", exc_info=True)
-            incident.status = "open"
-            work_order, technician = None, None
+                work_order, technician = None, None
 
         # Lifecycle notifications: Dispatch Email and In-App Notifications
         from app.services import workflow_notifications
@@ -252,7 +287,7 @@ class WhatsAppTicketService:
                 db,
                 report,
                 reporter_email=user.email,
-                incident_created=True,
+                incident_created=incident_is_new,
                 work_order=work_order,
                 technician=technician
             )
@@ -266,10 +301,58 @@ class WhatsAppTicketService:
         except Exception as e:
             logger.error(f"[WhatsApp] Notification dispatch error for {incident.incident_code}: {e}", exc_info=True)
 
+        if not incident_is_new:
+            # Notify all other students who previously reported this same incident
+            prior_reports = (
+                db.query(Report)
+                .filter(Report.incident_id == incident.id, Report.id != report.id)
+                .all()
+            )
+            for pr in prior_reports:
+                pr_user = db.query(User).filter(User.id == pr.reporter_id).first()
+                pr_phone = pr.contact_phone or (pr_user.phone_number if pr_user else None)
+                
+                # 1. WhatsApp notification to previous reporter
+                if pr_phone:
+                    notification_service.queue_whatsapp_notification(
+                        db=db,
+                        recipient_phone=pr_phone,
+                        body=(
+                            f"🔔 *Update for Ticket {incident.incident_code}:*\n\n"
+                            f"Another student has also reported the {incident.category} issue in {location.get('room_code', 'this room')}.\n\n"
+                            f"Total reports: {incident.correlated_count}. "
+                            f"Priority has been escalated. You will receive updates as our team resolves it."
+                        ),
+                        idempotency_key=f"wa_prior_dup_{incident.incident_code}_{pr.id}_{incident.correlated_count}",
+                        recipient_email=pr_user.email if pr_user else None,
+                        subject=f"Ticket {incident.incident_code} (Additional report registered)"
+                    )
+                
+                # 2. Email notification to previous reporter
+                if pr_user and pr_user.email:
+                    notification_service.queue_outbox_email(
+                        db=db,
+                        recipient_email=pr_user.email,
+                        subject=f"CampusOps Update: Additional report linked to {incident.incident_code}",
+                        body=(
+                            f"Hi {pr_user.name},\n\n"
+                            f"Another student has reported the same issue: {incident.title}.\n\n"
+                            f"Total reports combined: {incident.correlated_count}\n"
+                            f"Current Status: {incident.status.title()}\n"
+                            f"Location: {location.get('room_code', '')} ({location.get('building_name', '')})\n\n"
+                            f"Our facilities team is addressing this under work order "
+                            f"{work_order.work_order_code if work_order else 'pending'}.\n\n"
+                            f"— CampusOps Facilities Support"
+                        ),
+                        event_type="incident_update",
+                        idempotency_key=f"email_prior_dup_{incident.incident_code}_{pr.id}_{incident.correlated_count}"
+                    )
+
+        incident._was_merged = not incident_is_new
         db.commit()
         db.refresh(incident)
 
-        logger.info(f"[WhatsApp] Created ticket {incident.incident_code} (Status: {incident.status}) for user {user.email}")
+        logger.info(f"[WhatsApp] Handled ticket {incident.incident_code} (Status: {incident.status}, Was Merged: {not incident_is_new}) for user {user.email}")
         return incident
 
     # ---------------------------------------------------------

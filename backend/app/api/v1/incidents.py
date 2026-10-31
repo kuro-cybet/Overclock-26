@@ -10,6 +10,7 @@ from app.database.models.user import User
 from app.schemas.incident import (
     IncidentCreate,
     IncidentCorrelateRequest,
+    IncidentMergeRequest,
     IncidentResponse,
     IncidentDetailsResponse
 )
@@ -166,6 +167,37 @@ def correlate_reports(
         report_ids=payload.report_ids,
         target_incident_id=payload.target_incident_id,
         canonical_title=payload.new_title,
+        actor_id=current_user.id,
+        actor_role=current_user.role
+    )
+    db.commit()
+    db.refresh(incident)
+    return incident
+
+
+@router.post(
+    "/merge",
+    response_model=IncidentResponse,
+    summary="Merge Duplicate Incidents",
+    description="Merges one or more duplicate incidents into a primary incident. Re-points all associated reports, cancels redundant work orders, and dispatches WhatsApp and email notifications to all affected students.",
+    responses={
+        400: {"description": "Invalid merge request"},
+        401: {"description": "Authentication required"}
+    }
+)
+def merge_incidents(
+    payload: IncidentMergeRequest,
+    current_user: User = Depends(_incident_editor),
+    db: Session = Depends(get_db)
+):
+    """
+    Consolidate duplicate incidents into a master canonical incident and notify all reporters.
+    """
+    incident = correlation_service.merge_incidents(
+        db=db,
+        primary_incident_id=payload.primary_incident_id,
+        duplicate_incident_ids=payload.duplicate_incident_ids,
+        notes=payload.notes,
         actor_id=current_user.id,
         actor_role=current_user.role
     )
