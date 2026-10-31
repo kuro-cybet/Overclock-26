@@ -173,19 +173,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
             <p className="text-sm font-semibold text-slate-200 mt-1 truncate">
               {user?.sub_role ? String(user.sub_role).replace(/_/g, ' ') : user?.department || 'University Wide'}
             </p>
-            {role === 'admin' && (
-              <div className="mt-2 flex items-center">
-                <span
-                  className={`text-[11px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${
-                    user?.sub_role === 'system_admin'
-                      ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
-                      : 'bg-blue-400/20 text-blue-300 border border-blue-400/30'
-                  }`}
-                >
-                  {user?.sub_role === 'system_admin' ? '⚡ Full Authority' : '🔒 Scoped Authority'}
-                </span>
-              </div>
-            )}
           </div>
 
           {/* Navigation Items */}

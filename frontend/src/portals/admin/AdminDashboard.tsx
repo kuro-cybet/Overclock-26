@@ -121,15 +121,6 @@ export const AdminDashboard: React.FC = () => {
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-[#F29877]/20 text-[#d9673d]">
               Live Campus Command
             </span>
-            <span
-              className={`text-[11px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                user?.sub_role === 'system_admin'
-                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                  : 'bg-blue-100 text-blue-800 border border-blue-300'
-              }`}
-            >
-              {user?.sub_role === 'system_admin' ? '⚡ Full Admin Powers' : `🔒 Scoped Authority (${user?.sub_role?.replace(/_/g, ' ') || 'Admin'})`}
-            </span>
           </div>
           <h1 className="text-2xl font-black text-[#345873] mt-1">Operations Control Centre</h1>
           <p className="text-xs text-gray-500 mt-1">

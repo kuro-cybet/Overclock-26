@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../core/auth/AuthProvider';
-import { Bell, Search, Shield, Eye, Menu } from 'lucide-react';
+import { Bell, Search, Shield, Menu } from 'lucide-react';
 import { NotificationPanel } from './NotificationPanel';
 import { tokens } from '../../design-system/tokens';
 
@@ -11,18 +11,11 @@ interface TopbarProps {
   onToggleMobileMenu?: () => void;
 }
 
-const PREVIEW_ROLES = [
-  { value: 'technician', label: 'Technician' },
-  { value: 'faculty', label: 'Faculty' },
-  { value: 'student', label: 'Student' },
-];
-
 export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName, onToggleMobileMenu }) => {
-  const { user, isSystemAdmin, impersonate, logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [notifOpen, setNotifOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [switching, setSwitching] = useState(false);
 
   const currentRoleAccent =
     tokens.roleAccents[user?.role as keyof typeof tokens.roleAccents] ||
@@ -31,22 +24,6 @@ export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName, onToggleMo
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
     if (onSearch) onSearch(e.target.value);
-  };
-
-  const handlePortalChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const role = e.target.value;
-    e.target.value = '';
-    if (!role) return;
-
-    setSwitching(true);
-    try {
-      await impersonate(role);
-      navigate(`/${role}`, { replace: true });
-    } catch (err: any) {
-      alert(err?.message || 'Unable to open that portal.');
-    } finally {
-      setSwitching(false);
-    }
   };
 
   return (
@@ -88,38 +65,6 @@ export const Topbar: React.FC<TopbarProps> = ({ onSearch, portalName, onToggleMo
 
         {/* Right: Alerts & User Profile */}
         <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
-          {/* System administrator: portal preview switcher */}
-          {isSystemAdmin && (
-            <div className="hidden sm:flex items-center space-x-2 bg-[#EAF3F9] px-3 py-1.5 rounded-xl border border-[#8EB9D8]/60">
-              <Eye size={14} className="text-[#345873] shrink-0" />
-              <select
-                value=""
-                onChange={handlePortalChange}
-                disabled={switching}
-                title="Open another portal as that role"
-                className="bg-transparent text-[11px] font-bold text-[#345873] uppercase tracking-wider focus:outline-none cursor-pointer disabled:opacity-50"
-              >
-                <option value="">{switching ? 'Opening…' : 'Switch…'}</option>
-                {PREVIEW_ROLES.map((role) => (
-                  <option key={role.value} value={role.value}>
-                    {role.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Active Persona Badge */}
-          <div className="hidden lg:flex items-center space-x-2 bg-[#FFF4E9] px-3.5 py-1.5 rounded-xl border border-peach/50">
-            <span
-              className="w-2.5 h-2.5 rounded-full"
-              style={{ backgroundColor: currentRoleAccent.color }}
-            />
-            <span className="text-xs font-bold text-[#345873] uppercase tracking-wider">
-              {user?.role} {user?.sub_role ? `(${String(user.sub_role).replace(/_/g, ' ')})` : ''}
-            </span>
-          </div>
-
           {/* Notification Button */}
           <button
             onClick={() => setNotifOpen(true)}
