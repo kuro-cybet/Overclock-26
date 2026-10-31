@@ -3,7 +3,11 @@ import logging
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 
+import uuid
+from datetime import datetime, timedelta
 from app.database.models.user import User
+from app.database.models.whatsapp import WhatsAppConversation, WhatsAppUserLink
+from app.database.models.incident import Incident
 from app.services.whatsapp_service import whatsapp_service
 from app.services.whatsapp_ticket_service import whatsapp_ticket_service
 from app.services.whatsapp_conversation_service import whatsapp_conversation_service
@@ -53,6 +57,55 @@ class WhatsAppMessageProcessor:
         response_text = ""
 
         # 2. Check for account linking command: e.g. "LINK 123456" or "VERIFY 123456"
+        # Direct email account linking (e.g. user sends their student email)
+        email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", clean_text, re.IGNORECASE)
+        if email_match and not any(k in clean_text.lower() for k in ["broken", "not working", "fault", "issue", "damage"]):
+            target_email = email_match.group(0).lower().strip()
+            matched_user = db.query(User).filter(User.email.ilike(target_email)).first()
+            if matched_user:
+                clean_digits = re.sub(r'\D', '', sender_phone)
+                matched_user.phone_number = sender_phone
+                matched_user.whatsapp_verified = True
+                
+                now = datetime.utcnow()
+                existing_link = db.query(WhatsAppUserLink).filter(WhatsAppUserLink.user_id == matched_user.id).first()
+                if existing_link:
+                    existing_link.phone_number = clean_digits
+                    existing_link.is_verified = True
+                    existing_link.updated_at = now
+                else:
+                    new_link = WhatsAppUserLink(
+                        id=str(uuid.uuid4()),
+                        user_id=matched_user.id,
+                        phone_number=clean_digits,
+                        is_verified=True,
+                        verification_code="LINKED",
+                        created_at=now,
+                        updated_at=now,
+                        verified_at=now,
+                        code_expires_at=now + timedelta(days=3650)
+                    )
+                    db.add(new_link)
+
+                # Reassign any conversations or tickets from the temporary auto-provisioned student
+                temp_users = db.query(User).filter(User.phone_number == sender_phone, User.id != matched_user.id).all()
+                for tu in temp_users:
+                    db.query(WhatsAppConversation).filter(WhatsAppConversation.user_id == tu.id).update({"user_id": matched_user.id})
+                    db.query(Incident).filter(Incident.reporter_id == tu.id).update({"reporter_id": matched_user.id})
+                    db.delete(tu)
+                
+                db.commit()
+                response_text = (
+                    f"✅ *Account Linked Successfully!*\n\n"
+                    f"Welcome, *{matched_user.name}* ({matched_user.role.title()})! Your WhatsApp number is now connected to *{matched_user.email}*.\n\n"
+                    f"You can now:\n"
+                    f"1. *Report a Problem* (e.g., 'Projector in Room 204 is broken')\n"
+                    f"2. *Track Your Tickets* (e.g., 'Show my tickets')\n"
+                    f"3. *Campus Timetable & Info* (e.g., 'Where is the library?')"
+                )
+                await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
+                return response_text
+
         link_match = re.match(r"^(?:link|verify)\s*(\d{6})$", clean_text, re.IGNORECASE)
         if link_match:
             code = link_match.group(1)
@@ -102,6 +155,42 @@ class WhatsAppMessageProcessor:
         if lower_text in ["cancel", "reset", "stop", "abort", "restart", "start over"]:
             whatsapp_conversation_service.reset_to_idle(db, conv)
             response_text = "Conversation reset. How can I help you today? You can:\n1. Report a campus issue\n2. Ask a question about campus\n3. Track an existing complaint"
+            await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
+            return response_text
+
+        # Menu Option 1: Report a Problem
+        if lower_text in ["1", "1.", "report", "report issue", "report problem", "report a problem"]:
+            whatsapp_conversation_service.reset_to_idle(db, conv)
+            response_text = (
+                "🔧 *Report a Campus Problem*\n\n"
+                "Please describe the issue and the room or building.\n\n"
+                "For example, reply with:\n"
+                "• *'Projector in Room 204 is not working'*\n"
+                "• *'AC not cooling in Science Block Room 101'*\n"
+                "• *'Wi-Fi problem in Central Library'*"
+            )
+            await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
+            return response_text
+
+        # Menu Option 2: Track Tickets
+        if lower_text in ["2", "2.", "track", "tickets", "my tickets", "show tickets", "list tickets", "track tickets", "track your tickets"]:
+            whatsapp_conversation_service.reset_to_idle(db, conv)
+            response_text = whatsapp_ticket_service.query_user_tickets(db, user, query_code=None)
+            await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
+            return response_text
+
+        # Menu Option 3: Campus Information
+        if lower_text in ["3", "3.", "campus info", "timetable", "info", "campus timetable & info"]:
+            whatsapp_conversation_service.reset_to_idle(db, conv)
+            response_text = (
+                "🏛️ *Campus Information & Timetable*\n\n"
+                "You can ask me questions like:\n"
+                "• *'Where is the library?'*\n"
+                "• *'Who is the HOD of Engineering?'*\n"
+                "• *'Which classrooms are available?'*\n"
+                "• *'Where is Computer Science department?'*\n\n"
+                "What would you like to know?"
+            )
             await self._send_and_log(db, sender_phone, recipient_phone, response_text, message_id)
             return response_text
 
