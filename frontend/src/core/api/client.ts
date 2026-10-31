@@ -178,6 +178,7 @@ export const api = {
   // Rooms & Bookings & Assets
   getRooms: (params?: string) => apiRequest(`/rooms${params ? `?${params}` : ''}`),
   getBuildings: () => apiRequest('/rooms/buildings'),
+  getRoomById: (roomId: string) => apiRequest(`/rooms/${roomId}`),
   updateRoomReadiness: (roomId: string, readiness: string) =>
     apiRequest(`/rooms/${roomId}/readiness`, { method: 'PATCH', body: JSON.stringify({ daily_readiness_status: readiness }) }),
 
@@ -189,6 +190,7 @@ export const api = {
     apiRequest('/bookings', { method: 'POST', body: JSON.stringify(data) }),
 
   getAssets: (params?: string) => apiRequest(`/assets${params ? `?${params}` : ''}`),
+  getAssetByTag: (assetTag: string) => apiRequest(`/assets/qr/${encodeURIComponent(assetTag)}`),
 
   // Inventory & Approvals
   getInventory: (params?: string) => apiRequest(`/inventory${params ? `?${params}` : ''}`),
@@ -224,6 +226,8 @@ export const api = {
 
   // Notifications & Outbox
   getNotifications: () => apiRequest('/notifications'),
+  createBroadcastNotification: (data: { title: string; message: string; type: string }) =>
+    apiRequest('/notifications/broadcast', { method: 'POST', body: JSON.stringify(data) }),
   markNotificationRead: (id: string) =>
     apiRequest(`/notifications/${id}/read`, { method: 'PATCH' }),
   markAllNotificationsRead: () =>

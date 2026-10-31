@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
@@ -17,10 +17,16 @@ class RoomResponse(BaseModel):
     daily_readiness_status: str
     readiness_checked_at: Optional[datetime] = None
     readiness_checked_by: Optional[str] = None
+    freshness_state: Optional[str] = None
+    last_confirmed_at: Optional[datetime] = None
+    confirmed_by: Optional[str] = None
+    freshness_source: Optional[str] = None
     created_at: datetime
 
 class RoomReadinessUpdate(BaseModel):
-    daily_readiness_status: str  # confirmed, stale, unconfirmed
+    daily_readiness_status: Literal[
+        "confirmed_today", "confirmed", "stale", "unconfirmed", "unavailable"
+    ]
     notes: Optional[str] = None
 
 class BuildingFloorSummary(BaseModel):

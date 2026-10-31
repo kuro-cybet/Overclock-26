@@ -12,13 +12,13 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = ''
 
   let style = 'bg-gray-100 text-gray-700 border-gray-300';
 
-  if (['critical', 'p1', 'unconfirmed', 'blocked', 'cancelled'].includes(norm)) {
+  if (['critical', 'p1', 'unconfirmed', 'unavailable', 'blocked', 'cancelled'].includes(norm)) {
     style = 'bg-rose-50 text-rose-700 border-rose-200';
   } else if (['high', 'p2', 'stale', 'pending_approval', 'warning', 'unassigned'].includes(norm)) {
     style = 'bg-amber-50 text-amber-700 border-amber-200';
   } else if (['medium', 'p3', 'in_progress', 'pending_parts'].includes(norm)) {
     style = 'bg-blue-50 text-blue-700 border-blue-200';
-  } else if (['low', 'p4', 'confirmed', 'completed', 'resolved', 'operational', 'available', 'approved'].includes(norm)) {
+  } else if (['low', 'p4', 'confirmed', 'confirmed_today', 'completed', 'resolved', 'operational', 'available', 'approved'].includes(norm)) {
     style = 'bg-emerald-50 text-emerald-700 border-emerald-200';
   } else if (['open', 'assigned', 'submitted', 'correlated'].includes(norm)) {
     style = 'bg-purple-50 text-purple-700 border-purple-200';

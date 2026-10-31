@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from app.database.models.user import User
 from app.database.models.whatsapp import WhatsAppConversation, WhatsAppUserLink
 from app.database.models.incident import Incident
+from app.database.models.report import Report
+from app.database.models.notification import Notification
 from app.services.whatsapp_service import whatsapp_service
 from app.services.whatsapp_ticket_service import whatsapp_ticket_service
 from app.services.whatsapp_conversation_service import whatsapp_conversation_service
@@ -92,6 +94,8 @@ class WhatsAppMessageProcessor:
                 for tu in temp_users:
                     db.query(WhatsAppConversation).filter(WhatsAppConversation.user_id == tu.id).update({"user_id": matched_user.id})
                     db.query(Incident).filter(Incident.reporter_id == tu.id).update({"reporter_id": matched_user.id})
+                    db.query(Report).filter(Report.reporter_id == tu.id).update({"reporter_id": matched_user.id})
+                    db.query(Notification).filter(Notification.recipient_id == tu.id).update({"recipient_id": matched_user.id})
                     db.delete(tu)
                 
                 db.commit()

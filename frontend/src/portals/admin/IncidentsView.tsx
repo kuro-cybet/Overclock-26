@@ -311,7 +311,26 @@ export const IncidentsView: React.FC = () => {
                             <span className="font-mono font-bold text-[#345873]">{rep.report_code}</span>
                             <span className="font-semibold text-gray-800">{rep.title}</span>
                           </div>
-                          <p className="text-gray-500 text-[11px] mt-0.5">{rep.description}</p>
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-gray-500">
+                            <span>
+                              Reported by <strong className="text-gray-700">{rep.reporter_name || 'Unknown user'}</strong>
+                              {rep.reporter_role ? ` (${rep.reporter_role})` : ''}
+                            </span>
+                            <span>
+                              Location: <strong className="text-gray-700">{rep.building_name || 'Unknown building'}</strong>
+                              {rep.room_number ? ` · Room ${rep.room_number}` : ''}
+                              {rep.room_name ? ` — ${rep.room_name}` : ''}
+                            </span>
+                            {rep.asset_name && (
+                              <span>
+                                Equipment: <strong className="text-gray-700">{rep.asset_name}</strong>
+                                {rep.asset_tag ? ` (${rep.asset_tag})` : ''}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1.5 text-gray-600 text-[11px] leading-relaxed">
+                            <strong>Issue:</strong> {rep.description}
+                          </p>
                         </div>
                       </div>
 
@@ -570,4 +589,3 @@ export const IncidentsView: React.FC = () => {
     </div>
   );
 };
-
