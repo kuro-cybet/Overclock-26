@@ -116,12 +116,7 @@ export const AdminDashboard: React.FC = () => {
       {/* Page Title & Simulator CTA Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
         <div>
-          <div className="flex items-center space-x-2">
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-[#F29877]/20 text-[#d9673d]">
-              Live Campus Command
-            </span>
-          </div>
-          <h1 className="text-2xl font-black text-[#345873] mt-1">Operations Control Centre</h1>
+          <h1 className="text-2xl font-black text-[#345873]">Operations Control Centre</h1>
           <p className="text-xs text-gray-500 mt-1">
             {user?.sub_role === 'system_admin'
               ? 'Unrestricted root authority across all operational modules, simulations, staff schedules, and system overrides.'
@@ -335,4 +330,5 @@ export const AdminDashboard: React.FC = () => {
     </div>
   );
 };
+
 

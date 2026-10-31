@@ -43,6 +43,9 @@ ALTER TABLE public.notification_outbox
     ADD COLUMN IF NOT EXISTS event_type character varying(50),
     ADD COLUMN IF NOT EXISTS idempotency_key character varying(128);
 
+ALTER TABLE public.notification_outbox
+    ALTER COLUMN recipient_email DROP NOT NULL;
+
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -131,6 +134,19 @@ CREATE TABLE IF NOT EXISTS public.whatsapp_messages_log (
 CREATE INDEX IF NOT EXISTS idx_wa_msgs_message_id ON public.whatsapp_messages_log (message_id);
 CREATE INDEX IF NOT EXISTS idx_wa_msgs_sender ON public.whatsapp_messages_log (sender_phone);
 CREATE INDEX IF NOT EXISTS idx_wa_msgs_recipient ON public.whatsapp_messages_log (recipient_phone);
+
+-- -----------------------------------------------------------------------------
+-- 8. Enable Row Level Security & Lockdown Direct Anon Access
+-- -----------------------------------------------------------------------------
+ALTER TABLE public.whatsapp_user_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_messages_log ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.whatsapp_user_links FROM anon, authenticated;
+REVOKE ALL ON public.whatsapp_conversations FROM anon, authenticated;
+REVOKE ALL ON public.whatsapp_sessions FROM anon, authenticated;
+REVOKE ALL ON public.whatsapp_messages_log FROM anon, authenticated;
 
 COMMIT;
 
